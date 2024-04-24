@@ -22,6 +22,6 @@ int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_tr
 int stream_fini(stream_t *this);
 int stream_start(stream_t *this);
 int stream_stop(stream_t *this);
-void stream_stats();
+void stream_stats(unsigned int duration);
 
 #endif /* _STREAMING_CLIENT_STREAM_H_ */

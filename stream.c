@@ -130,11 +130,12 @@ int stream_stop(stream_t *this)
     return ok ? 0 : - 1;
 }
 
-void stream_stats()
+void stream_stats(unsigned int duration)
 {
     fprintf(stderr, "success count: %u\n", success_count);
     fprintf(stderr, "failure count: %u\n", failure_count);
-    fprintf(stderr, "transfer size: %lu\n", transfer_size);
+    fprintf(stderr, "transfer size: %lu B\n", transfer_size);
+    fprintf(stderr, "transfer rate: %.0lf kB/s\n", (double) transfer_size / duration / 1024.0);
 }
 
 
@@ -143,7 +144,7 @@ static void stream_callback(uint8_t *buffer, int length);
 
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer) 
 {
-    stream_t *this __attribute__ ((unused)) = (stream_t *)transfer->user_data;
+    stream_t *this __attribute__ ((unused)) = (stream_t *) transfer->user_data;
     atomic_fetch_sub(&active_transfers, 1);
     if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
         /* success!!! */

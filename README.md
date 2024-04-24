@@ -18,6 +18,11 @@ Stream using Cypress GPIF to USB DMA multichannel example firmware for 20 second
 ./streaming-client -f cyfxgpiftousbmulti.img -C -t 20
 ```
 
+Stream using fvtest-slavefifo test firmware for 20 seconds:
+```
+./streaming-client -f fvtest-slavefifo.img -C -t 20
+```
+
 
 ## License
 

@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    stream_stats();
+    stream_stats(duration);
 
     status = stream_fini(&stream);
     if (status == -1) {
