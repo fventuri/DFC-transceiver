@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
     }
 
     if (!cypress_example) {
-        status = clock_start(&dfc.clock, &dfc.usb_device, samplerate);
+        status = clock_start(&dfc.clock, &dfc.usb_device, reference_clock * (1.0 + 1e-6 * reference_ppm), samplerate);
         if (status == -1) {
             return EXIT_FAILURE;
         }

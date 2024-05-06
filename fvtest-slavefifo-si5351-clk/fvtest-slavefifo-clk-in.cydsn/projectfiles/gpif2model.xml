@@ -9,7 +9,7 @@
       <ADMuxedEnabled>False</ADMuxedEnabled>
       <InterfaceType>Slave</InterfaceType>
       <CommunicationType>Synchronous</CommunicationType>
-      <ClockSource>Internal</ClockSource>
+      <ClockSource>External</ClockSource>
       <ClockEdge>Positive</ClockEdge>
       <Endianness>LittleEndian</Endianness>
       <DataBusWidth>Bit32</DataBusWidth>

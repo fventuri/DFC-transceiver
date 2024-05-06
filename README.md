@@ -3,24 +3,14 @@
 
 ## Examples
 
-Stream using SDDC firmware for 20 seconds:
+Stream using DFC firmware for 20 seconds (default sample rate=32MHz):
 ```
-./streaming-client -f SDDC_FX3.img -t 20
-```
-
-Stream using Cypress bulk source sink example firmware for 20 seconds:
-```
-./streaming-client -f cyfxbulksrcsink.img -C -e 1 -t 20
+./streaming-client -f fvtest-slavefifo-si5351-clk.img -t 20
 ```
 
-Stream using Cypress GPIF to USB DMA multichannel example firmware for 20 seconds:
+Stream using DFC firmware for 20 seconds (sample rate=100MHz):
 ```
-./streaming-client -f cyfxgpiftousbmulti.img -C -t 20
-```
-
-Stream using fvtest-slavefifo test firmware for 20 seconds:
-```
-./streaming-client -f fvtest-slavefifo.img -C -t 20
+./streaming-client -f fvtest-slavefifo-si5351-clk.img -s 100e6 -t 20
 ```
 
 

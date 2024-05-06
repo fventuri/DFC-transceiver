@@ -41,7 +41,7 @@ int usb_init(usb_device_t *this, const char *firmware_file)
         return 0;
     }
 
-    fprintf(stderr, "FX3 streamer example not found - try FX3 in DFU mode\n");
+    fprintf(stderr, "FX3 streamer example not found - trying FX3 in DFU mode\n");
 
     device_handle = libusb_open_device_with_vid_pid(NULL, fx3_dfu_mode[0], fx3_dfu_mode[1]);
     if (device_handle == NULL) {
@@ -198,7 +198,7 @@ int usb_control_read(const usb_device_t *this, uint8_t control, uint8_t *data, u
                                     size,
                                     timeout);
     if (status < 0) {
-        fprintf(stderr, "usb_control_write - error in libusb_control_transfer(%hhu): %s\n", control, libusb_strerror(status));
+        fprintf(stderr, "usb_control_read - error in libusb_control_transfer(%hhu): %s\n", control, libusb_strerror(status));
         return -1; 
     }
 
@@ -207,9 +207,6 @@ int usb_control_read(const usb_device_t *this, uint8_t control, uint8_t *data, u
 
 int usb_control_write(const usb_device_t *this, uint8_t control, const uint8_t *data, uint16_t size)
 {
-   assert(data != NULL);
-   assert(size > 0);
-
    int status;
    status = libusb_control_transfer(this->device_handle,
                                     LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR,

@@ -1,5 +1,5 @@
 /*
- ## Cypress USB 3.0 Platform header file (fvtest-slavefifo.h)
+ ## Cypress USB 3.0 Platform header file (fvtest-slavefifo-si5351-clk.h)
  ## ===========================
  ##
  ##  Copyright Cypress Semiconductor Corporation, 2010-2023,

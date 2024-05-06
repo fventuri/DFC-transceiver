@@ -20,12 +20,12 @@ FX3FWROOT=/opt/FX3SDK/cyfx3sdk
 
 include $(FX3FWROOT)/fw_build/fx3_fw/fx3_build_config.mak
 
-MODULE = fvtest-slavefifo
+MODULE = fvtest-slavefifo-si5351-clk
 
 all:$(MODULE).img
 
 SOURCE= $(MODULE).c 	\
-	fvtest-slavefifodscr.c	\
+	fvtest-slavefifo-si5351-clkdscr.c	\
 	cyfxtx.c
 
 ifeq ($(CYFXBUILD),arm)

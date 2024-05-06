@@ -17,9 +17,13 @@ static const unsigned int timeout = 5000;  /* timeout (in ms) for each transfer 
 static atomic_int active_transfers;
 static bool stop_transfers = false;
 /* stream stats */
-static unsigned int success_count = 0;  // number of successful transfers
-static unsigned int failure_count = 0;  // number of failed transfers
-static unsigned long transfer_size = 0;  // total size of data transfers
+static unsigned int success_count = 0;    // number of successful transfers
+static unsigned int failure_count = 0;    // number of failed transfers
+static unsigned long transfer_size = 0;   // total size of data transfers
+static short sample_even_min = SHRT_MAX;  // minimum even sample value
+static short sample_even_max = SHRT_MIN;  // maximum even sample value
+static short sample_odd_min = SHRT_MAX;   // minimum odd sample value
+static short sample_odd_max = SHRT_MIN;   // maximum odd sample value
 
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer) ;
 
@@ -136,6 +140,8 @@ void stream_stats(unsigned int duration)
     fprintf(stderr, "failure count: %u\n", failure_count);
     fprintf(stderr, "transfer size: %lu B\n", transfer_size);
     fprintf(stderr, "transfer rate: %.0lf kB/s\n", (double) transfer_size / duration / 1024.0);
+    fprintf(stderr, "even samples range: [%hd,%hd]\n", sample_even_min, sample_even_max);
+    fprintf(stderr, "odd samples range: [%hd,%hd]\n", sample_odd_min, sample_odd_max);
 }
 
 
@@ -185,5 +191,16 @@ static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
 static void stream_callback(uint8_t *buffer, int length)
 {
     transfer_size += length;
+    short *samples = (short *)buffer;
+    int nsamples = length / sizeof(samples[0]);
+    for (int i = 0; i < nsamples; i++) {
+        if (i % 2 == 0) {
+            sample_even_min = samples[i] < sample_even_min ? samples[i] : sample_even_min;
+            sample_even_max = samples[i] > sample_even_max ? samples[i] : sample_even_max;
+        } else {
+            sample_odd_min = samples[i] < sample_odd_min ? samples[i] : sample_odd_min;
+            sample_odd_max = samples[i] > sample_odd_max ? samples[i] : sample_odd_max;
+        }
+    }
     return;
 }

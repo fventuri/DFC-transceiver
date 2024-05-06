@@ -20,7 +20,7 @@
  ## ===========================
 */
 
-#include "fvtest-slavefifo.h"
+#include "fvtest-slavefifo-si5351-clk.h"
 
 /* Standard device descriptor for USB 3.0 */
 const uint8_t CyFxUSB30DeviceDscr[] __attribute__ ((aligned (32))) =

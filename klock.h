@@ -12,9 +12,8 @@
 typedef struct {
     double samplerate;
     double reference;
-    double correction_ppm;
 } klock_t;
 
-int clock_start(klock_t *this, usb_device_t *usb_device, double samplerate);
+int clock_start(klock_t *this, usb_device_t *usb_device, double reference, double samplerate);
 
 #endif /* _STREAMING_CLIENT_KLOCK_H_ */

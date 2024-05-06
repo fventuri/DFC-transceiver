@@ -8,16 +8,16 @@
 
 #include <stdio.h>
 
-int clock_start(klock_t *this, usb_device_t *usb_device, double samplerate)
+int clock_start(klock_t *this, usb_device_t *usb_device, double reference, double samplerate)
 {
     const uint8_t STARTADC = 0xb2;
 
-    uint32_t samplerate_int = (uint32_t)samplerate;
+    double data[] = { reference, samplerate };
 
     int status;
-    status = usb_control_write(usb_device, STARTADC, (uint8_t *)&samplerate_int, sizeof(samplerate_int));
+    status = usb_control_write(usb_device, STARTADC, (uint8_t *)data, sizeof(data));
     if (status != 0) {
-        fprintf(stderr, "clock_start(%d) failed\n", samplerate_int);
+        fprintf(stderr, "clock_start(%'lf, %'lf) failed\n", reference, samplerate);
         return -1;
     }
 

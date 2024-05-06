@@ -1,5 +1,5 @@
 /*
- ## Cypress USB 3.0 Platform source file (fvtest-slavefifo.c)
+ ## Cypress USB 3.0 Platform source file (fvtest-slavefifo-si5351-clk.c)
  ## ===========================
  ##
  ##  Copyright Cypress Semiconductor Corporation, 2010-2023,
@@ -46,14 +46,17 @@
 #include "cyu3os.h"
 #include "cyu3dma.h"
 #include "cyu3error.h"
-#include "fvtest-slavefifo.h"
+#include "fvtest-slavefifo-si5351-clk.h"
 #include "cyu3usb.h"
 #include "cyu3uart.h"
+#include "cyu3i2c.h"
 #include "cyu3gpio.h"
 #include "cyu3utils.h"
 #include "cyu3pib.h"
 #include "cyu3gpif.h"
 #include "cyfxgpif2config.h"
+
+#include <math.h>
 
 CyU3PThread          glAppThread;            /* Application thread structure */
 CyU3PDmaMultiChannel glDmaChHandle;
@@ -65,11 +68,17 @@ CyBool_t glForceLinkU2   = CyFalse;     /* Whether the device should try to init
 
 // fv
 unsigned long glDMAProdEvent = 0;
+unsigned long glDMAProdEventPrevIter = 0;
 
 uint8_t glEp0Buffer[64] __attribute__ ((aligned (32))); /* Local buffer used for vendor command handling. */
 volatile uint8_t  vendorRqtCnt = 0;
 volatile uint32_t underrunCnt = 0;
 volatile CyBool_t glRstRqt = CyFalse;
+volatile CyBool_t glStartFx3Rqt = CyFalse;
+volatile CyBool_t glStopFx3Rqt = CyFalse;
+volatile CyBool_t glStartAdcRqt = CyFalse;
+volatile double glStartAdcReference = 0.0;
+volatile double glStartAdcFrequency = 0.0;
 
 /*
  * USB event logging: We use a 4 KB buffer to store USB driver event data, which can then be viewed
@@ -83,6 +92,12 @@ static volatile uint32_t InEpEvtCount = 0;      /* Number of endpoint events rec
 static volatile uint32_t OutEpEvtCount = 0;     /* Number of endpoint events received on loopback OUT endpoint. */
 static volatile uint8_t  DataSignature = 0;     /* Variable used to update streaming data with a sequence number. */
 static volatile uint8_t  CommitFailCnt = 0;     /* Variable used to count commit buffer failures. */
+
+static void StartFx3();
+static void StopFx3();
+static CyBool_t Si5351(double reference, double frequency);
+static void rational_approximation(double value, uint32_t max_denominator,
+                                   uint32_t *a, uint32_t *b, uint32_t *c);
 
 /* Enable this to change the loopback channel into an AUTO channel. */
 //#define LOOPBACK_AUTO
@@ -121,6 +136,7 @@ CyFxApplnDebugInit (void)
 {
     CyU3PUartConfig_t uartConfig;
     CyU3PReturnStatus_t apiRetStatus = CY_U3P_SUCCESS;
+    CyU3PI2cConfig_t i2cConfig;
 
     /* Initialize the UART for printing debug messages */
     apiRetStatus = CyU3PUartInit();
@@ -161,6 +177,24 @@ CyFxApplnDebugInit (void)
     }
 
     CyU3PDebugPreamble(CyFalse);
+
+    /* Initialize and configure the I2C block. */
+    apiRetStatus = CyU3PI2cInit ();
+    if (apiRetStatus != CY_U3P_SUCCESS)
+    {
+        CyFxAppErrorHandler (apiRetStatus);
+    }
+
+    CyU3PMemSet ((uint8_t *)&i2cConfig, 0, sizeof(i2cConfig));
+    i2cConfig.bitRate    = 100000;
+    i2cConfig.busTimeout = 0xFFFFFFFF;
+    i2cConfig.dmaTimeout = 0xFFFF;
+    i2cConfig.isDma      = CyFalse;
+    apiRetStatus = CyU3PI2cSetConfig (&i2cConfig, NULL);
+    if (apiRetStatus != CY_U3P_SUCCESS)
+    {
+        CyFxAppErrorHandler (apiRetStatus);
+    }
 }
 
 void
@@ -488,8 +522,10 @@ CyFxApplnStart (
         CyFxAppErrorHandler (apiRetStatus);
     }
 
+#if 0
     /* fv - SDDC_FX3 GPIF II state machine checks FW_TRG to start */
     CyU3PGpifControlSWInput(CyTrue);
+#endif
 
     /* Update the flag so that the application thread is notified of this. */
     glIsApplnActive = CyTrue;
@@ -623,6 +659,31 @@ CyFxApplnUSBSetupCB (
             case 0xE0: /* Device reset request for automation. */
                 glRstRqt = CyTrue;
                 CyU3PUsbAckSetup ();
+                isHandled = CyTrue;
+                break;
+
+            case 0xAA: /* DFC - STARTFX3 */
+                glStartFx3Rqt = CyTrue;
+                CyU3PUsbAckSetup ();
+                isHandled = CyTrue;
+                break;
+
+            case 0xAB: /* DFC - STOPFX3 */
+                glStopFx3Rqt = CyTrue;
+                CyU3PUsbAckSetup ();
+                isHandled = CyTrue;
+                break;
+
+            case 0xB2: /* DFC - STARTADC */
+                status = CyU3PUsbGetEP0Data (wLength, glEp0Buffer, NULL);
+                if (status != CY_U3P_SUCCESS)
+                {
+                    CyU3PDebugPrint (2, "Get data failed\r\n");
+                }
+                glStartAdcRqt = CyTrue;
+                double *ep0_data = (double *)glEp0Buffer;
+                glStartAdcReference = ep0_data[0];
+                glStartAdcFrequency = ep0_data[1];
                 isHandled = CyTrue;
                 break;
 
@@ -979,11 +1040,32 @@ CyFxAppThread_Entry (
                 CyU3PThreadSleep (1);
         }
 
+        if (glStartFx3Rqt)
+        {
+            glStartFx3Rqt = CyFalse;
+            StartFx3();
+        }
+
+        if (glStopFx3Rqt)
+        {
+            glStopFx3Rqt = CyFalse;
+            StopFx3();
+        }
+
+        if (glStartAdcRqt)
+        {
+            glStartAdcRqt = CyFalse;
+            Si5351(glStartAdcReference, glStartAdcFrequency);
+        }
+
 // fv
         // show glDMAProdEvent every second or so
         loopCount++;
         if (loopCount % 100 == 0) {
-            CyU3PDebugPrint (4, "glDMAProdEvent: %u (%u)\r\n", glDMAProdEvent, loopCount);
+            if (glDMAProdEvent != glDMAProdEventPrevIter) {
+                CyU3PDebugPrint (4, "glDMAProdEvent: %u (%u)\r\n", glDMAProdEvent, loopCount);
+            }
+            glDMAProdEventPrevIter = glDMAProdEvent;
         }
 
         CyU3PThreadSleep (10);
@@ -1039,7 +1121,8 @@ main (void)
     /* Initialize the device */
     CyU3PSysClockConfig_t clockConfig;
 
-    clockConfig.setSysClk400  = CyFalse;
+    /* setSysClk400 clock configurations */
+    clockConfig.setSysClk400  = CyTrue;   /* FX3 device's master clock is set to a frequency > 400 MHz */
     clockConfig.cpuClkDiv     = 2;
     clockConfig.dmaClkDiv     = 2;
     clockConfig.mmioClkDiv    = 2;
@@ -1063,7 +1146,7 @@ main (void)
     CyU3PMemSet ((uint8_t *)&io_cfg, 0, sizeof (io_cfg));
     io_cfg.isDQ32Bit = CyTrue;
     io_cfg.useUart   = CyTrue;
-    io_cfg.useI2C    = CyFalse;
+    io_cfg.useI2C    = CyTrue;
     io_cfg.useI2S    = CyFalse;
     io_cfg.useSpi    = CyFalse;
     io_cfg.lppMode   = CY_U3P_IO_MATRIX_LPP_DEFAULT;
@@ -1091,6 +1174,219 @@ handle_fatal_error:
 
     /* Cannot recover from this error. */
     while (1);
+}
+
+
+static void StartFx3()
+{
+    /* SDDC_FX3 GPIF II state machine checks FW_TRG to start */
+    CyU3PGpifControlSWInput(CyTrue);
+}
+
+
+static void StopFx3()
+{
+    /* SDDC_FX3 GPIF II state machine checks !FW_TRG to stop */
+    CyU3PGpifControlSWInput(CyFalse);
+}
+
+
+static CyBool_t Si5351(double reference, double frequency)
+{
+    static const double SI5351_MAX_VCO_FREQ = 900e6;
+    static const uint32_t SI5351_MAX_DENOMINATOR = 1048575;
+    static const double FREQUENCY_TOLERANCE = 1e-8;
+ 
+    const uint8_t SI5351_ADDR = 0x60 << 1;
+    const uint8_t SI5351_REGISTER_DEVICE_STATUS = 0;
+    const uint8_t SI5351_REGISTER_CLK_BASE      = 16;
+    const uint8_t SI5351_REGISTER_MSNA_BASE     = 26;
+    const uint8_t SI5351_REGISTER_MS0_BASE      = 42;
+    const uint8_t SI5351_REGISTER_PLL_RESET     = 177;
+
+
+    /* part A - compute all the Si5351 register settings */
+
+    /* if the requested sample rate is below 1MHz, use an R divider */
+    double r_frequency = frequency;
+    uint8_t rdiv = 0;
+    while (r_frequency < 1e6 && rdiv <= 7) {
+        r_frequency *= 2.0;
+      rdiv += 1;
+    }
+    if (r_frequency < 1e6) {
+        CyU3PDebugPrint (4, "ERROR - Si5351() - requested frequency is too low\r\n");
+        return CyFalse;
+    }
+
+    /* choose an even integer for the output MS */
+    uint32_t output_ms = ((uint32_t)(SI5351_MAX_VCO_FREQ / r_frequency));
+    output_ms -= output_ms % 2;
+    if (output_ms < 4 || output_ms > 900) {
+        CyU3PDebugPrint (4, "ERROR - Si5351() - invalid output MS: %d\r\n", output_ms);
+        return CyFalse;
+    }
+    double vco_frequency = r_frequency * output_ms;
+
+    /* feedback MS */
+    double feedback_ms = vco_frequency / reference;
+    /* find a good rational approximation for feedback_ms */
+    uint32_t a;
+    uint32_t b;
+    uint32_t c;
+    rational_approximation(feedback_ms, SI5351_MAX_DENOMINATOR, &a, &b, &c);
+
+    double actual_ratio = a + (double)b / (double)c;
+    double actual_frequency = reference * actual_ratio / output_ms / (1 << rdiv);
+    double frequency_diff = actual_frequency - frequency;
+    if (frequency_diff <= -FREQUENCY_TOLERANCE || frequency_diff >= FREQUENCY_TOLERANCE) {
+        uint32_t frequency_diff_nhz = 1000000000 * frequency_diff;
+        CyU3PDebugPrint (4, "WARNING - Si5351() - frequency difference=%dnHz\r\n", frequency_diff_nhz);
+    }
+    CyU3PDebugPrint (4, "INFO - Si5351() - a=%d b=%d c=%d output_ms=%d rdiv=%d\r\n", a, b , c, output_ms, rdiv);
+
+    /* configure clock input and PLL */
+    uint32_t b_over_c = 128 * b / c;
+    uint32_t msn_p1 = 128 * a + b_over_c - 512;
+    uint32_t msn_p2 = 128 * b  - c * b_over_c;
+    uint32_t msn_p3 = c;
+  
+    uint8_t data_clkin[] = {
+      (msn_p3 & 0x0000ff00) >>  8,
+      (msn_p3 & 0x000000ff) >>  0,
+      (msn_p1 & 0x00030000) >> 16,
+      (msn_p1 & 0x0000ff00) >>  8,
+      (msn_p1 & 0x000000ff) >>  0,
+      (msn_p3 & 0x000f0000) >> 12 | (msn_p2 & 0x000f0000) >> 16,
+      (msn_p2 & 0x0000ff00) >>  8,
+      (msn_p2 & 0x000000ff) >>  0
+    };
+
+    /* configure clock output */
+    /* since the output divider is an even integer a = output_ms, b = 0, c = 1 */
+    uint32_t const ms_p1 = 128 * output_ms - 512;
+    uint32_t const ms_p2 = 0;
+    uint32_t const ms_p3 = 1;
+
+    uint8_t data_clkout[] = {
+      (ms_p3 & 0x0000ff00) >>  8,
+      (ms_p3 & 0x000000ff) >>  0,
+      rdiv << 5 | (ms_p1 & 0x00030000) >> 16,
+      (ms_p1 & 0x0000ff00) >>  8,
+      (ms_p1 & 0x000000ff) >>  0,
+      (ms_p3 & 0x000f0000) >> 12 | (ms_p2 & 0x000f0000) >> 16,
+      (ms_p2 & 0x0000ff00) >>  8,
+      (ms_p2 & 0x000000ff) >>  0
+    };
+
+
+    /* part B - configure the Si5351 and start the clock */
+    CyU3PI2cPreamble_t preamble;
+    uint8_t data[8];
+    CyU3PReturnStatus_t apiRetStatus = CY_U3P_SUCCESS;
+
+    /* 1 - clock input and PLL */
+    preamble.length = 2;
+    preamble.buffer[0] = SI5351_ADDR | 0x0;   /* 0 -> write (write register address) */
+    preamble.buffer[1] = SI5351_REGISTER_MSNA_BASE;
+    preamble.ctrlMask  = 0x0000;
+    apiRetStatus = CyU3PI2cTransmitBytes (&preamble, data_clkin, sizeof(data_clkin), 0);
+    if (apiRetStatus != CY_U3P_SUCCESS)
+    {
+        CyU3PDebugPrint (4, "I2C Transmit Bytes failed, Error code = %d\r\n", apiRetStatus);
+        return CyFalse;
+    }
+
+    /* 2 - clock output */
+    preamble.length = 2;
+    preamble.buffer[0] = SI5351_ADDR | 0x0;   /* 0 -> write (write register address) */
+    preamble.buffer[1] = SI5351_REGISTER_MS0_BASE;
+    preamble.ctrlMask  = 0x0000;
+    apiRetStatus = CyU3PI2cTransmitBytes (&preamble, data_clkout, sizeof(data_clkout), 0);
+    if (apiRetStatus != CY_U3P_SUCCESS)
+    {
+        CyU3PDebugPrint (4, "I2C Transmit Bytes failed, Error code = %d\r\n", apiRetStatus);
+        return CyFalse;
+    }
+
+    /* 3 - reset PLL */
+    preamble.length = 2;
+    preamble.buffer[0] = SI5351_ADDR | 0x0;   /* 0 -> write (write register address) */
+    preamble.buffer[1] = SI5351_REGISTER_PLL_RESET;
+    preamble.ctrlMask  = 0x0000;
+    data[0] = 0x20;
+    apiRetStatus = CyU3PI2cTransmitBytes (&preamble, data, 1, 0);
+    if (apiRetStatus != CY_U3P_SUCCESS)
+    {
+        CyU3PDebugPrint (4, "I2C Transmit Bytes failed, Error code = %d\r\n", apiRetStatus);
+        return CyFalse;
+    }
+
+    /* 4 - power on clock 0 */
+    preamble.length = 2;
+    preamble.buffer[0] = SI5351_ADDR | 0x0;   /* 0 -> write (write register address) */
+    preamble.buffer[1] = SI5351_REGISTER_CLK_BASE;
+    preamble.ctrlMask  = 0x0000;
+    data[0] = 0x4f;
+    apiRetStatus = CyU3PI2cTransmitBytes (&preamble, data, 1, 0);
+    if (apiRetStatus != CY_U3P_SUCCESS)
+    {
+        CyU3PDebugPrint (4, "I2C Transmit Bytes failed, Error code = %d\r\n", apiRetStatus);
+        return CyFalse;
+    }
+
+    return CyTrue;
+}
+
+
+/* best rational approximation:
+ *
+ *     value ~= a + b/c     (where c <= max_denominator)
+ *
+ * References:
+ * - https://en.wikipedia.org/wiki/Continued_fraction#Best_rational_approximations
+ */
+static void rational_approximation(double value, uint32_t max_denominator,
+                                   uint32_t *a, uint32_t *b, uint32_t *c)
+{
+  const double epsilon = 1e-5;
+
+  double af;
+  double f0 = modf(value, &af);
+  *a = (uint32_t) af;
+  *b = 0;
+  *c = 1;
+  double f = f0;
+  double delta = f0;
+  /* we need to take into account that the fractional part has a_0 = 0 */
+  uint32_t h[] = {1, 0};
+  uint32_t k[] = {0, 1};
+  for(int i = 0; i < 100; ++i){
+    if(f <= epsilon){
+      break;
+    }
+    double anf;
+    f = modf(1.0 / f,&anf);
+    uint32_t an = (uint32_t) anf;
+    for(uint32_t m = (an + 1) / 2; m <= an; ++m){
+      uint32_t hm = m * h[1] + h[0];
+      uint32_t km = m * k[1] + k[0];
+      if(km > max_denominator){
+        break;
+      }
+      double d = fabs((double) hm / (double) km - f0);
+      if(d < delta){
+        delta = d;
+        *b = hm;
+        *c = km;
+      }
+    }
+    uint32_t hn = an * h[1] + h[0];
+    uint32_t kn = an * k[1] + k[0];
+    h[0] = h[1]; h[1] = hn;
+    k[0] = k[1]; k[1] = kn;
+  }
+  return;
 }
 
 /* [ ] */
