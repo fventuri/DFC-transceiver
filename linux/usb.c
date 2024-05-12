@@ -57,7 +57,7 @@ int usb_init(usb_device_t *this, const char *firmware_file)
         return -1;
     }
 
-    /* look again for streamer device first */
+    /* look again for streamer device */
     for (int retry = 0; retry < 10; retry++) {
         device_handle = libusb_open_device_with_vid_pid(NULL, fx3_streamer_example[0], fx3_streamer_example[1]);
         if (device_handle != NULL) {
@@ -267,7 +267,7 @@ static int upload_fx3_firmware(const char *firmware_file, libusb_device_handle *
     /* read the complete firmware image in memory */
     ssize_t nread = read(fd, firmware_image, filesize);
     close(fd);
-    if (nread != filesize) {
+    if (nread != (ssize_t)filesize) {
         fprintf(stderr, "read full image failed - nread=%ld\n", nread);
         free(firmware_image);
         return -1;
@@ -303,14 +303,14 @@ static int upload_fx3_firmware(const char *firmware_file, libusb_device_handle *
         index += sizeof(data[0]) + sizeof(data[1]);
         uint32_t block_length = length * sizeof(uint32_t);
         if (length != 0) {
-            for (int i = 2; i < length + 2; i++) {
+            for (int i = 2; i < (int)length + 2; i++) {
                 checksum += data[i];
             }
             uint8_t *block_start = firmware_image + index;
             uint8_t *block_end = block_start + block_length;
             while (block_start < block_end) {
                 int chunk_length = block_end - block_start;
-                if (chunk_length > max_write_size) {
+                if (chunk_length > (int)max_write_size) {
                     chunk_length = max_write_size;
                 }
                 int status = libusb_control_transfer(device_handle,
