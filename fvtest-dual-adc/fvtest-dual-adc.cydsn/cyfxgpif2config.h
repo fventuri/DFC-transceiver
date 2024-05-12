@@ -1,6 +1,6 @@
 /*
- * Project Name: fvtest-slavefifo.cyfx
- * Time : 05/01/2024 21:15:51
+ * Project Name: fvtest-dual-adc.cyfx
+ * Time : 05/12/2024 15:40:50
  * Device Type: FX3
  * Project Type: GPIF2
  *

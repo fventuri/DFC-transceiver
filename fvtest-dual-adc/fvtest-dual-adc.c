@@ -1,5 +1,5 @@
 /*
- ## Cypress USB 3.0 Platform source file (fvtest-slavefifo-si5351-clk.c)
+ ## Cypress USB 3.0 Platform source file (fvtest-dual-adc.c)
  ## ===========================
  ##
  ##  Copyright Cypress Semiconductor Corporation, 2010-2023,
@@ -46,7 +46,7 @@
 #include "cyu3os.h"
 #include "cyu3dma.h"
 #include "cyu3error.h"
-#include "fvtest-slavefifo-si5351-clk.h"
+#include "fvtest-dual-adc.h"
 #include "cyu3usb.h"
 #include "cyu3uart.h"
 #include "cyu3i2c.h"
@@ -866,7 +866,9 @@ void
 CyFxApplnInit (void)
 {
     CyU3PReturnStatus_t apiRetStatus = CY_U3P_SUCCESS;
-    CyU3PPibClock_t pibClk = {4, CyFalse, CyFalse, CY_U3P_SYS_CLK};
+    // fv
+    //CyU3PPibClock_t pibClk = {4, CyFalse, CyFalse, CY_U3P_SYS_CLK};
+    CyU3PPibClock_t pibClk = {2, CyFalse, CyFalse, CY_U3P_SYS_CLK};
 
     /* Initialize the PIB block. */
     apiRetStatus = CyU3PPibInit (CyTrue, &pibClk);
@@ -1198,7 +1200,7 @@ static CyBool_t Si5351(double reference, double frequency)
     static const double FREQUENCY_TOLERANCE = 1e-8;
  
     const uint8_t SI5351_ADDR = 0x60 << 1;
-    const uint8_t SI5351_REGISTER_DEVICE_STATUS = 0;
+    //const uint8_t SI5351_REGISTER_DEVICE_STATUS = 0;
     const uint8_t SI5351_REGISTER_CLK_BASE      = 16;
     const uint8_t SI5351_REGISTER_MSNA_BASE     = 26;
     const uint8_t SI5351_REGISTER_MS0_BASE      = 42;

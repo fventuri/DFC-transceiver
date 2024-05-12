@@ -1,5 +1,5 @@
 /*
- ## Cypress USB 3.0 Platform header file (fvtest-slavefifo-si5351-clk.h)
+ ## Cypress USB 3.0 Platform header file (fvtest-single-adc.h)
  ## ===========================
  ##
  ##  Copyright Cypress Semiconductor Corporation, 2010-2023,
@@ -61,7 +61,7 @@
 
 /* Size of DMA buffers used by the application. */
 #ifndef CY_FX_DMA_BUF_SIZE
-#define CY_FX_DMA_BUF_SIZE              (32768)
+#define CY_FX_DMA_BUF_SIZE              (16384)
 #endif
 
 /* Number of DMA buffers to be used on the channel. */

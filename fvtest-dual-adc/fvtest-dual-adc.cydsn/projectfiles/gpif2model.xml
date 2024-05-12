@@ -3,9 +3,9 @@
   <InterfaceDefination>
     <InterfaceSetting>
       <I2SEnabled>False</I2SEnabled>
-      <I2CEnabled>False</I2CEnabled>
+      <I2CEnabled>True</I2CEnabled>
       <SPIEnabled>False</SPIEnabled>
-      <I2SEnabled>False</I2SEnabled>
+      <I2SEnabled>True</I2SEnabled>
       <ADMuxedEnabled>False</ADMuxedEnabled>
       <InterfaceType>Slave</InterfaceType>
       <CommunicationType>Synchronous</CommunicationType>

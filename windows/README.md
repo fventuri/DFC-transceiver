@@ -29,5 +29,5 @@ The streaming client executable will be under build\Release\streaming-client.exe
 
 Stream using DFC firmware for 20 seconds (sample rate=100MHz):
 ```
-build\Release\streaming-client.exe -f fvtest-slavefifo-si5351-clk.img -t 20 -s 100e6
+build\Release\streaming-client.exe -f fvtest-dual-adc.img -t 20 -s 100e6
 ```
