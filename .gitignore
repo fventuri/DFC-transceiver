@@ -1,4 +1,6 @@
 *.o
+*.elf
+*.map
 streaming-client
 old/
 *.old

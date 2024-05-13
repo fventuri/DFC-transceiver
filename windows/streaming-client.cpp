@@ -183,29 +183,31 @@ int main(int argc, char *argv[])
         transfer->context = endPt->BeginDataXfer(transfer->buffer, transferSize, &transfer->overlap);
     }
 
-    // start ADC clock
-    usbDevice->ControlEndPt->Target  = TGT_DEVICE;
-    usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
-    usbDevice->ControlEndPt->ReqCode = STARTADC;
-    usbDevice->ControlEndPt->Value   = 0;
-    usbDevice->ControlEndPt->Index   = 0;
-    double data[] = { reference_clock * (1.0 + 1e-6 * reference_ppm), samplerate };
-    LONG dataSize = sizeof(data);
-    if (!usbDevice->ControlEndPt->Write((UCHAR *)data, dataSize)) {
-        fprintf(stderr, "FX3 control STARTADC command failed\n");
-        return 1;
-    }
+    if (!cypress_example) {
+        // start ADC clock
+        usbDevice->ControlEndPt->Target  = TGT_DEVICE;
+        usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
+        usbDevice->ControlEndPt->ReqCode = STARTADC;
+        usbDevice->ControlEndPt->Value   = 0;
+        usbDevice->ControlEndPt->Index   = 0;
+        double data[] = { reference_clock * (1.0 + 1e-6 * reference_ppm), samplerate };
+        LONG dataSize = sizeof(data);
+        if (!usbDevice->ControlEndPt->Write((UCHAR *)data, dataSize)) {
+            fprintf(stderr, "FX3 control STARTADC command failed\n");
+            return 1;
+        }
 
-    // start FX3
-    usbDevice->ControlEndPt->Target  = TGT_DEVICE;
-    usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
-    usbDevice->ControlEndPt->ReqCode = STARTFX3;
-    usbDevice->ControlEndPt->Value   = 0;
-    usbDevice->ControlEndPt->Index   = 0;
-    dataSize = 0;
-    if (!usbDevice->ControlEndPt->Write(NULL, dataSize)) {
-        fprintf(stderr, "FX3 control STARTFX3 command failed\n");
-        return 1;
+        // start FX3
+        usbDevice->ControlEndPt->Target  = TGT_DEVICE;
+        usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
+        usbDevice->ControlEndPt->ReqCode = STARTFX3;
+        usbDevice->ControlEndPt->Value   = 0;
+        usbDevice->ControlEndPt->Index   = 0;
+        dataSize = 0;
+        if (!usbDevice->ControlEndPt->Write(NULL, dataSize)) {
+            fprintf(stderr, "FX3 control STARTFX3 command failed\n");
+            return 1;
+        }
     }
 
     stopTransfers = false;
@@ -269,16 +271,18 @@ int main(int argc, char *argv[])
     }
     free(transfers);
 
-    // stop FX3
-    usbDevice->ControlEndPt->Target  = TGT_DEVICE;
-    usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
-    usbDevice->ControlEndPt->ReqCode = STOPFX3;
-    usbDevice->ControlEndPt->Value   = 0;
-    usbDevice->ControlEndPt->Index   = 0;
-    dataSize = 0;
-    if (!usbDevice->ControlEndPt->Write(NULL, dataSize)) {
-         fprintf(stderr, "FX3 control STOPFX3 command failed\n");
-         return 1;
+    if (!cypress_example) {
+        // stop FX3
+        usbDevice->ControlEndPt->Target  = TGT_DEVICE;
+        usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
+        usbDevice->ControlEndPt->ReqCode = STOPFX3;
+        usbDevice->ControlEndPt->Value   = 0;
+        usbDevice->ControlEndPt->Index   = 0;
+        dataSize = 0;
+        if (!usbDevice->ControlEndPt->Write(NULL, dataSize)) {
+            fprintf(stderr, "FX3 control STOPFX3 command failed\n");
+            return 1;
+        }
     }
 
     if (!DeleteTimerQueue(timerQueue)) {

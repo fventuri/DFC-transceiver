@@ -1273,7 +1273,7 @@ static CyBool_t Si5351(double reference, double frequency)
     uint8_t data_clkout[] = {
       (ms_p3 & 0x0000ff00) >>  8,
       (ms_p3 & 0x000000ff) >>  0,
-      rdiv << 5 | (ms_p1 & 0x00030000) >> 16,
+      rdiv << 4 | (output_ms == 4 ? 0xc : 0x0) | (ms_p1 & 0x00030000) >> 16,
       (ms_p1 & 0x0000ff00) >>  8,
       (ms_p1 & 0x000000ff) >>  0,
       (ms_p3 & 0x000f0000) >> 12 | (ms_p2 & 0x000f0000) >> 16,
