@@ -37,9 +37,10 @@ int main(int argc, char *argv[])
     unsigned int reqsize = 16;
     unsigned int queuedepth = 16;
     unsigned int duration = 100;  /* duration of the test in seconds */
+    bool show_histogram = false;
 
     int opt;
-    while ((opt = getopt(argc, argv, "f:s:x:c:i:e:r:q:t:C")) != -1) {
+    while ((opt = getopt(argc, argv, "f:s:x:c:i:e:r:q:t:CH")) != -1) {
         switch (opt) {
         case 'f':
             firmware_file = optarg;
@@ -97,6 +98,9 @@ int main(int argc, char *argv[])
         case 'C':
             cypress_example = true;
             break;
+        case 'H':
+            show_histogram = true;
+            break;
         }
     }
 
@@ -133,7 +137,7 @@ int main(int argc, char *argv[])
 
     stream_t stream;
 
-    status = stream_init(&stream, &dfc.usb_device, reqsize, queuedepth);
+    status = stream_init(&stream, &dfc.usb_device, reqsize, queuedepth, show_histogram);
     if (status == -1) {
         usb_close(&dfc.usb_device);
         return EXIT_FAILURE;

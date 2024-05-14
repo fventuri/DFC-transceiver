@@ -33,6 +33,10 @@ static SHORT sampleEvenMax = SHRT_MIN;  // maximum even sample value
 static SHORT sampleOddMin = SHRT_MAX;   // minimum odd sample value
 static SHORT sampleOddMax = SHRT_MIN;   // maximum odd sample value
 
+static const int SIXTEEN_BITS_SIZE = 65536;
+static unsigned long long *histogramEven = NULL;   // histogram for even samples
+static unsigned long long *histogramOdd = NULL;    // histogram for odd samples
+
 volatile bool stopTransfers = false;
 
 
@@ -50,9 +54,10 @@ int main(int argc, char *argv[])
     unsigned int reqsize = 16;
     unsigned int queuedepth = 16;
     unsigned int duration = 100;  /* duration of the test in seconds */
+    bool show_histogram = false;
 
     int opt;
-    while ((opt = getopt(argc, argv, "f:s:x:c:i:e:r:q:t:C")) != -1) {
+    while ((opt = getopt(argc, argv, "f:s:x:c:i:e:r:q:t:CH")) != -1) {
         switch (opt) {
         case 'f':
             firmware_file = optarg;
@@ -109,6 +114,9 @@ int main(int argc, char *argv[])
             break;
         case 'C':
             cypress_example = true;
+            break;
+        case 'H':
+            show_histogram = true;
             break;
         }
     }
@@ -181,6 +189,17 @@ int main(int argc, char *argv[])
         ZeroMemory(&transfer->overlap, sizeof(OVERLAPPED));
         transfer->overlap.hEvent = CreateEvent(NULL, false, false, NULL);
         transfer->context = endPt->BeginDataXfer(transfer->buffer, transferSize, &transfer->overlap);
+    }
+
+    if (show_histogram) {
+        histogramEven = (unsigned long long *) malloc(SIXTEEN_BITS_SIZE * sizeof(unsigned long long));
+        histogramOdd = (unsigned long long *) malloc(SIXTEEN_BITS_SIZE * sizeof(unsigned long long));
+        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+            histogramEven[i] = 0;
+        }   
+        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+            histogramOdd[i] = 0;
+        }
     }
 
     if (!cypress_example) {
@@ -271,6 +290,13 @@ int main(int argc, char *argv[])
     }
     free(transfers);
 
+    if (histogramEven != NULL) {
+        free(histogramEven);
+    }       
+    if (histogramOdd != NULL) {
+        free(histogramOdd);
+    }
+
     if (!cypress_example) {
         // stop FX3
         usbDevice->ControlEndPt->Target  = TGT_DEVICE;
@@ -278,7 +304,7 @@ int main(int argc, char *argv[])
         usbDevice->ControlEndPt->ReqCode = STOPFX3;
         usbDevice->ControlEndPt->Value   = 0;
         usbDevice->ControlEndPt->Index   = 0;
-        dataSize = 0;
+        LONG dataSize = 0;
         if (!usbDevice->ControlEndPt->Write(NULL, dataSize)) {
             fprintf(stderr, "FX3 control STOPFX3 command failed\n");
             return 1;
@@ -321,6 +347,18 @@ static void streamCallback(UINT8 *buffer, long length)
             sampleOddMax = samples[i] > sampleOddMax ? samples[i] : sampleOddMax;
         }
     }
+
+    if (histogramEven != NULL) {
+        for (int i = 0; i < nsamples; i += 2) {
+            histogramEven[samples[i] + SIXTEEN_BITS_SIZE / 2]++;
+        }
+    }   
+    if (histogramOdd != NULL) {
+        for (int i = 1; i < nsamples; i += 2) {
+            histogramOdd[samples[i] + SIXTEEN_BITS_SIZE / 2]++;
+        }       
+    }
+
     return;
 }
 
@@ -332,6 +370,52 @@ static void streamStats(unsigned int duration)
     fprintf(stderr, "transfer rate: %.0lf kB/s\n", (double) totalTransferSize / duration / 1024.0);
     fprintf(stderr, "even samples range: [%hd,%hd]\n", sampleEvenMin, sampleEvenMax);
     fprintf(stderr, "odd samples range: [%hd,%hd]\n", sampleOddMin, sampleOddMax);
+
+    if (histogramEven != NULL) {
+        int histogramMin = SIXTEEN_BITS_SIZE - 1;
+        int histogramMax = 0;
+        unsigned long long totalHistogramSamples = 0;
+        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+            if (histogramEven[i] > 0) {
+                histogramMin = i < histogramMin ? i : histogramMin;
+                histogramMax = i > histogramMax ? i : histogramMax;
+                totalHistogramSamples += histogramEven[i];
+            }
+        }
+        if (histogramMax >= histogramMin) {
+            fprintf(stdout, "# Even samples histogram\n");
+            for (int i = histogramMin; i <= histogramMax; i++) {
+                fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
+                        histogramEven[i]);
+            }
+            fprintf(stdout, "\n");
+        }
+        fprintf(stderr, "total even histogram samples: %llu\n", totalHistogramSamples);
+    }
+
+    if (histogramOdd != NULL) {
+        int histogramMin = SIXTEEN_BITS_SIZE - 1;
+        int histogramMax = 0;
+        unsigned long long totalHistogramSamples = 0;
+        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+            if (histogramOdd[i] > 0) {
+                histogramMin = i < histogramMin ? i : histogramMin;
+                histogramMax = i > histogramMax ? i : histogramMax;
+                totalHistogramSamples += histogramOdd[i];
+            }
+        }
+        if (histogramMax >= histogramMin) {
+            fprintf(stdout, "# Odd samples histogram\n");
+            for (int i = histogramMin; i <= histogramMax; i++) {
+                fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
+                        histogramOdd[i]);
+            }
+            fprintf(stdout, "\n");
+        }
+        fprintf(stderr, "total odd histogram samples: %llu\n", totalHistogramSamples);
+    }
+
+    return;
 }
 
 static VOID CALLBACK doStopTransfers(PVOID lpParam, BOOLEAN TimerOrWaitFired)

@@ -25,10 +25,15 @@ static short sample_even_max = SHRT_MIN;       // maximum even sample value
 static short sample_odd_min = SHRT_MAX;        // minimum odd sample value
 static short sample_odd_max = SHRT_MIN;        // maximum odd sample value
 
+static const int SIXTEEN_BITS_SIZE = 65536;
+static unsigned long long *histogram_even = NULL;   // histogram for even samples
+static unsigned long long *histogram_odd = NULL;    // histogram for odd samples
+
+
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer) ;
 
 
-int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_transfer, int num_concurrent_transfers)
+int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_transfer, int num_concurrent_transfers, bool show_histogram)
 {
     this->usb_device = usb_device;
     this->num_packets_per_transfer = num_packets_per_transfer;
@@ -62,6 +67,17 @@ int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_tr
                                   timeout);
     }
 
+    if (show_histogram) {
+        histogram_even = (unsigned long long *) malloc(SIXTEEN_BITS_SIZE * sizeof(unsigned long long));
+        histogram_odd = (unsigned long long *) malloc(SIXTEEN_BITS_SIZE * sizeof(unsigned long long));
+        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+            histogram_even[i] = 0;
+        }   
+        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+            histogram_odd[i] = 0;
+        }
+    }
+
     return 0;
 }
 
@@ -79,6 +95,13 @@ int stream_fini(stream_t *this)
             libusb_dev_mem_free(this->usb_device->device_handle, this->buffers[i], this->transfer_size);
         }
         free(this->buffers);
+    }
+
+    if (histogram_even != NULL) {
+        free(histogram_even);
+    }
+    if (histogram_odd != NULL) {
+        free(histogram_odd);
     }
 
     return 0;
@@ -142,6 +165,52 @@ void stream_stats(unsigned int duration)
     fprintf(stderr, "transfer rate: %.0lf kB/s\n", (double) transfer_size / duration / 1024.0);
     fprintf(stderr, "even samples range: [%hd,%hd]\n", sample_even_min, sample_even_max);
     fprintf(stderr, "odd samples range: [%hd,%hd]\n", sample_odd_min, sample_odd_max);
+
+    if (histogram_even != NULL) {
+        int histogram_min = SIXTEEN_BITS_SIZE - 1;
+        int histogram_max = 0;
+        unsigned long long total_histogram_samples = 0;
+        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+            if (histogram_even[i] > 0) {
+                histogram_min = i < histogram_min ? i : histogram_min;
+                histogram_max = i > histogram_max ? i : histogram_max;
+                total_histogram_samples += histogram_even[i];
+            }
+        }
+        if (histogram_max >= histogram_min) {
+            fprintf(stdout, "# Even samples histogram\n");
+            for (int i = histogram_min; i <= histogram_max; i++) {
+                fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
+                        histogram_even[i]);
+            }
+            fprintf(stdout, "\n");
+        }
+        fprintf(stderr, "total even histogram samples: %llu\n", total_histogram_samples);
+    }
+
+    if (histogram_odd != NULL) {
+        int histogram_min = SIXTEEN_BITS_SIZE - 1;
+        int histogram_max = 0;
+        unsigned long long total_histogram_samples = 0;
+        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+            if (histogram_odd[i] > 0) {
+                histogram_min = i < histogram_min ? i : histogram_min;
+                histogram_max = i > histogram_max ? i : histogram_max;
+                total_histogram_samples += histogram_odd[i];
+            }
+        }
+        if (histogram_max >= histogram_min) {
+            fprintf(stdout, "# Odd samples histogram\n");
+            for (int i = histogram_min; i <= histogram_max; i++) {
+                fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
+                        histogram_odd[i]);
+            }
+            fprintf(stdout, "\n");
+        }
+        fprintf(stderr, "total odd histogram samples: %llu\n", total_histogram_samples);
+    }
+
+    return;
 }
 
 
@@ -202,5 +271,17 @@ static void stream_callback(uint8_t *buffer, int length)
             sample_odd_max = samples[i] > sample_odd_max ? samples[i] : sample_odd_max;
         }
     }
+
+    if (histogram_even != NULL) {
+        for (int i = 0; i < nsamples; i += 2) {
+            histogram_even[samples[i] + SIXTEEN_BITS_SIZE / 2]++;
+        }
+    }
+    if (histogram_odd != NULL) {
+        for (int i = 1; i < nsamples; i += 2) {
+            histogram_odd[samples[i] + SIXTEEN_BITS_SIZE / 2]++;
+        }
+    }
+
     return;
 }
