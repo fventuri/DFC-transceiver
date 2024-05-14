@@ -167,17 +167,19 @@ void stream_stats(unsigned int duration)
     fprintf(stderr, "odd samples range: [%hd,%hd]\n", sample_odd_min, sample_odd_max);
 
     if (histogram_even != NULL) {
-        int histogram_min = SIXTEEN_BITS_SIZE - 1;
-        int histogram_max = 0;
+        int histogram_min = -1;
+        int histogram_max = -1;
         unsigned long long total_histogram_samples = 0;
         for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
             if (histogram_even[i] > 0) {
-                histogram_min = i < histogram_min ? i : histogram_min;
-                histogram_max = i > histogram_max ? i : histogram_max;
+                if (histogram_min < 0) {
+                    histogram_min = i;
+                }
+                histogram_max = i;
                 total_histogram_samples += histogram_even[i];
             }
         }
-        if (histogram_max >= histogram_min) {
+        if (total_histogram_samples > 0) {
             fprintf(stdout, "# Even samples histogram\n");
             for (int i = histogram_min; i <= histogram_max; i++) {
                 fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
@@ -189,17 +191,19 @@ void stream_stats(unsigned int duration)
     }
 
     if (histogram_odd != NULL) {
-        int histogram_min = SIXTEEN_BITS_SIZE - 1;
-        int histogram_max = 0;
+        int histogram_min = -1;
+        int histogram_max = -1;
         unsigned long long total_histogram_samples = 0;
         for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
             if (histogram_odd[i] > 0) {
-                histogram_min = i < histogram_min ? i : histogram_min;
-                histogram_max = i > histogram_max ? i : histogram_max;
+                if (histogram_min < 0) {
+                    histogram_min = i;
+                }
+                histogram_max = i;
                 total_histogram_samples += histogram_odd[i];
             }
         }
-        if (histogram_max >= histogram_min) {
+        if (total_histogram_samples > 0) {
             fprintf(stdout, "# Odd samples histogram\n");
             for (int i = histogram_min; i <= histogram_max; i++) {
                 fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
