@@ -38,10 +38,10 @@ int main(int argc, char *argv[])
     unsigned int queuedepth = 16;
     unsigned int duration = 100;  /* duration of the test in seconds */
     bool show_histogram = false;
-    bool write_to_stdout = false;
+    int write_fileno = -1;
 
     int opt;
-    while ((opt = getopt(argc, argv, "f:s:x:c:i:e:r:q:t:CHW")) != -1) {
+    while ((opt = getopt(argc, argv, "f:s:x:c:i:e:r:q:t:o:CH")) != -1) {
         switch (opt) {
         case 'f':
             firmware_file = optarg;
@@ -96,14 +96,22 @@ int main(int argc, char *argv[])
                 return EXIT_FAILURE;
             }
             break;
+        case 'o':
+            if (strcmp(optarg, "-") == 0) {
+                write_fileno = STDOUT_FILENO;
+            } else {
+                write_fileno = open(optarg, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                if (write_fileno == -1) {
+                    fprintf(stderr, "open(%s) for writing failed: %s\n", optarg, strerror(errno));
+                    return EXIT_FAILURE;
+                }
+            }
+            break;
         case 'C':
             cypress_example = true;
             break;
         case 'H':
             show_histogram = true;
-            break;
-        case 'W':
-            write_to_stdout = true;
             break;
         }
     }
@@ -113,8 +121,8 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    if (show_histogram && write_to_stdout) {
-        fprintf(stderr, "[ERROR] options -H (show histogram) and -W (write to stdout) are mutually exclusive\n");
+    if (show_histogram && write_fileno == STDOUT_FILENO) {
+        fprintf(stderr, "[ERROR] options -H (show histogram) and -o - (write to stdout) are mutually exclusive\n");
         return EXIT_FAILURE;
     }
 
@@ -146,7 +154,7 @@ int main(int argc, char *argv[])
 
     stream_t stream;
 
-    status = stream_init(&stream, &dfc.usb_device, reqsize, queuedepth, show_histogram, write_to_stdout);
+    status = stream_init(&stream, &dfc.usb_device, reqsize, queuedepth, show_histogram, write_fileno);
     if (status == -1) {
         usb_close(&dfc.usb_device);
         return EXIT_FAILURE;
@@ -195,6 +203,10 @@ int main(int argc, char *argv[])
             usb_close(&dfc.usb_device);
             return EXIT_FAILURE;
         }
+    }
+
+    if (!(write_fileno == -1 || write_fileno == STDOUT_FILENO)) {
+        close(write_fileno);
     }
 
     status = usb_close(&dfc.usb_device);

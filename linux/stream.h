@@ -19,7 +19,7 @@ typedef struct {
     struct libusb_transfer **transfers;
 } stream_t;
 
-int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_transfer, int num_concurrent_transfers, bool show_histogram, bool write_to_stdout);
+int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_transfer, int num_concurrent_transfers, bool show_histogram, int write_fileno);
 int stream_fini(stream_t *this);
 int stream_start(stream_t *this);
 int stream_stop(stream_t *this);

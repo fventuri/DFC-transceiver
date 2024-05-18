@@ -135,12 +135,6 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    if (show_histogram && write_ostream.is_open()) {
-        fprintf(stderr, "[ERROR] options -H (show histogram) and -W (write to stdout) are mutually exclusive\n");
-        write_ostream.close();
-        return EXIT_FAILURE;
-    }
-
     // look for streamer device first; if found, use that
     CCyUSBDevice *usbDevice = new CCyUSBDevice(NULL);
     if (!open_usb_device_with_vid_pid(usbDevice, fx3_streamer_example[0], fx3_streamer_example[1])) {

@@ -36,7 +36,7 @@ static int write_fileno = -1;
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer) ;
 
 
-int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_transfer, int num_concurrent_transfers, bool show_histogram, bool write_to_stdout)
+int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_transfer, int num_concurrent_transfers, bool show_histogram, int write_fd)
 {
     this->usb_device = usb_device;
     this->num_packets_per_transfer = num_packets_per_transfer;
@@ -81,9 +81,7 @@ int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_tr
         }
     }
 
-    if (write_to_stdout) {
-        write_fileno = STDOUT_FILENO;
-    }
+    write_fileno = write_fd;
 
     return 0;
 }
@@ -299,8 +297,8 @@ static void stream_callback(uint8_t *buffer, int length)
         while (remaining > 0) {
             ssize_t written = write(write_fileno, buffer + (length - remaining), remaining);
             if (written == -1) {
-                fprintf(stderr, "write to stdout failed - error: %s\n", strerror(errno));
-                /* if there's any error stop writing to stdout */
+                fprintf(stderr, "write to output file failed - error: %s\n", strerror(errno));
+                /* if there's any error stop writing to output file */
                 write_fileno = -1;
                 break;
             } else {
