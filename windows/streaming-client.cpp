@@ -1,6 +1,7 @@
 #include "getopt.h"
 #include <stdio.h>
 #include <chrono>
+#include <fstream>
 #include <thread>
 
 #include <wtypes.h>
@@ -36,6 +37,7 @@ static SHORT sampleOddMax = SHRT_MIN;   // maximum odd sample value
 static const int SIXTEEN_BITS_SIZE = 65536;
 static unsigned long long *histogramEven = NULL;   // histogram for even samples
 static unsigned long long *histogramOdd = NULL;    // histogram for odd samples
+static std::ofstream write_ostream;
 
 volatile bool stopTransfers = false;
 
@@ -57,7 +59,7 @@ int main(int argc, char *argv[])
     bool show_histogram = false;
 
     int opt;
-    while ((opt = getopt(argc, argv, "f:s:x:c:i:e:r:q:t:CH")) != -1) {
+    while ((opt = getopt(argc, argv, "f:s:x:c:i:e:r:q:t:o:CH")) != -1) {
         switch (opt) {
         case 'f':
             firmware_file = optarg;
@@ -112,6 +114,13 @@ int main(int argc, char *argv[])
                 return EXIT_FAILURE;
             }
             break;
+        case 'o':
+            write_ostream.open(optarg, std::ios_base::out | std::ios_base::binary);
+            if (!write_ostream) {
+                fprintf(stderr, "open(%s) for writing failed\n", optarg);
+                return EXIT_FAILURE;
+            }
+            break;
         case 'C':
             cypress_example = true;
             break;
@@ -123,6 +132,12 @@ int main(int argc, char *argv[])
 
     if (firmware_file == NULL) {
         fprintf(stderr, "missing firmware file\n");
+        return EXIT_FAILURE;
+    }
+
+    if (show_histogram && write_ostream.is_open()) {
+        fprintf(stderr, "[ERROR] options -H (show histogram) and -W (write to stdout) are mutually exclusive\n");
+        write_ostream.close();
         return EXIT_FAILURE;
     }
 
@@ -311,6 +326,8 @@ int main(int argc, char *argv[])
         }
     }
 
+    write_ostream.close();
+
     if (!DeleteTimerQueue(timerQueue)) {
         fprintf(stderr, "DeleteTimerQueue failed - error=%d\n", GetLastError());
     }
@@ -357,6 +374,16 @@ static void streamCallback(UINT8 *buffer, long length)
         for (int i = 1; i < nsamples; i += 2) {
             histogramOdd[samples[i] + SIXTEEN_BITS_SIZE / 2]++;
         }       
+    }
+
+    if (write_ostream.is_open()) {
+        //write_ostream.write((const UINT8 *)buffer, length);
+        write_ostream.write((char *) buffer, length);
+        if (!write_ostream) {
+            fprintf(stderr, "write to output file failed\n");
+            /* if there's any error stop writing to the output file */
+            write_ostream.close();
+        }
     }
 
     return;

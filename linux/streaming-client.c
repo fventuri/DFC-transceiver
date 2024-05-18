@@ -38,9 +38,10 @@ int main(int argc, char *argv[])
     unsigned int queuedepth = 16;
     unsigned int duration = 100;  /* duration of the test in seconds */
     bool show_histogram = false;
+    bool write_to_stdout = false;
 
     int opt;
-    while ((opt = getopt(argc, argv, "f:s:x:c:i:e:r:q:t:CH")) != -1) {
+    while ((opt = getopt(argc, argv, "f:s:x:c:i:e:r:q:t:CHW")) != -1) {
         switch (opt) {
         case 'f':
             firmware_file = optarg;
@@ -101,11 +102,19 @@ int main(int argc, char *argv[])
         case 'H':
             show_histogram = true;
             break;
+        case 'W':
+            write_to_stdout = true;
+            break;
         }
     }
 
     if (firmware_file == NULL) {
         fprintf(stderr, "missing firmware file\n");
+        return EXIT_FAILURE;
+    }
+
+    if (show_histogram && write_to_stdout) {
+        fprintf(stderr, "[ERROR] options -H (show histogram) and -W (write to stdout) are mutually exclusive\n");
         return EXIT_FAILURE;
     }
 
@@ -137,7 +146,7 @@ int main(int argc, char *argv[])
 
     stream_t stream;
 
-    status = stream_init(&stream, &dfc.usb_device, reqsize, queuedepth, show_histogram);
+    status = stream_init(&stream, &dfc.usb_device, reqsize, queuedepth, show_histogram, write_to_stdout);
     if (status == -1) {
         usb_close(&dfc.usb_device);
         return EXIT_FAILURE;

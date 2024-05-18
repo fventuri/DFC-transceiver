@@ -6,10 +6,12 @@
 
 #include "stream.h"
 
+#include <errno.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 static const unsigned int timeout = 5000;  /* timeout (in ms) for each transfer */
@@ -28,12 +30,13 @@ static short sample_odd_max = SHRT_MIN;        // maximum odd sample value
 static const int SIXTEEN_BITS_SIZE = 65536;
 static unsigned long long *histogram_even = NULL;   // histogram for even samples
 static unsigned long long *histogram_odd = NULL;    // histogram for odd samples
+static int write_fileno = -1;
 
 
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer) ;
 
 
-int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_transfer, int num_concurrent_transfers, bool show_histogram)
+int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_transfer, int num_concurrent_transfers, bool show_histogram, bool write_to_stdout)
 {
     this->usb_device = usb_device;
     this->num_packets_per_transfer = num_packets_per_transfer;
@@ -76,6 +79,10 @@ int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_tr
         for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
             histogram_odd[i] = 0;
         }
+    }
+
+    if (write_to_stdout) {
+        write_fileno = STDOUT_FILENO;
     }
 
     return 0;
@@ -284,6 +291,21 @@ static void stream_callback(uint8_t *buffer, int length)
     if (histogram_odd != NULL) {
         for (int i = 1; i < nsamples; i += 2) {
             histogram_odd[samples[i] + SIXTEEN_BITS_SIZE / 2]++;
+        }
+    }
+
+    if (write_fileno >= 0) {
+        size_t remaining = length;
+        while (remaining > 0) {
+            ssize_t written = write(write_fileno, buffer + (length - remaining), remaining);
+            if (written == -1) {
+                fprintf(stderr, "write to stdout failed - error: %s\n", strerror(errno));
+                /* if there's any error stop writing to stdout */
+                write_fileno = -1;
+                break;
+            } else {
+                remaining -= written;
+            }
         }
     }
 
