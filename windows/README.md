@@ -27,7 +27,12 @@ The streaming client executable will be under build\Release\streaming-client.exe
 
 ## How to run it
 
-Stream using DFC firmware for 20 seconds (sample rate=100MHz):
+Stream using DFC firmware for 20 seconds in single ADC mode (sample rate=100MHz):
 ```
-build\Release\streaming-client.exe -f fvtest-dual-adc.img -t 20 -s 100e6
+build\Release\streaming-client.exe -f fx3-firmware.img -m 1 -s 100e6 -t 20
+```
+
+Stream using DFC firmware for 20 seconds in dual ADC mode (sample rate=100MHz):
+```
+build\Release\streaming-client.exe -f fx3-firmware.img -m 2 -s 100e6 -t 20
 ```

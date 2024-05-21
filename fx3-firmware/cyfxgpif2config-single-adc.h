@@ -1,5 +1,5 @@
 /*
- * Project Name: fvtest-single-adc.cyfx
+ * Project Name: single-adc.cyfx
  * Time : 05/12/2024 15:42:09
  * Device Type: FX3
  * Project Type: GPIF2
@@ -47,7 +47,7 @@
 /* Summary
    Transition function values used in the state machine.
  */
-uint16_t CyFxGpifTransition[]  = {
+static uint16_t CyFxGpifTransition[]  = {
     0x0000, 0xAAAA, 0x5555, 0xFFFF, 0x3333
 };
 
@@ -57,7 +57,7 @@ uint16_t CyFxGpifTransition[]  = {
    This array consists of non-replicated waveform descriptors and acts as a 
    waveform table. 
  */
-CyU3PGpifWaveData CyFxGpifWavedata[]  = {
+static CyU3PGpifWaveData CyFxGpifWavedata[]  = {
     {{0x1E739E01,0x00000100,0x80000000},{0x00000000,0x00000000,0x00000000}},
     {{0x2E739A04,0x20010002,0x80000080},{0x00000000,0x00000000,0x00000000}},
     {{0x1E739A03,0x24000104,0x80000080},{0x00000000,0x00000000,0x00000000}},
@@ -71,14 +71,14 @@ CyU3PGpifWaveData CyFxGpifWavedata[]  = {
 /* Summary
    Table that maps state indices to the descriptor table indices.
  */
-uint8_t CyFxGpifWavedataPosition[]  = {
+static uint8_t CyFxGpifWavedataPosition[]  = {
     0,1,2,3,4,5,6,7,2,1
 };
 
 /* Summary
    GPIF II configuration register values.
  */
-uint32_t CyFxGpifRegValue[]  = {
+static uint32_t CyFxGpifRegValue[]  = {
     0x80008300,  /*  CY_U3P_PIB_GPIF_CONFIG */
     0x00000067,  /*  CY_U3P_PIB_GPIF_BUS_CONFIG */
     0x00000000,  /*  CY_U3P_PIB_GPIF_BUS_CONFIG2 */
@@ -160,7 +160,7 @@ uint32_t CyFxGpifRegValue[]  = {
 /* Summary
    This structure holds all the configuration inputs for the GPIF II. 
  */
-const CyU3PGpifConfig_t CyFxGpifConfig  = {
+static const CyU3PGpifConfig_t CyFxGpifConfig  = {
     (uint16_t)(sizeof(CyFxGpifWavedataPosition)/sizeof(uint8_t)),
     CyFxGpifWavedata,
     CyFxGpifWavedataPosition,

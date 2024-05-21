@@ -26,6 +26,7 @@ static void sig_stop(int signum);
 int main(int argc, char *argv[])
 {
     char *firmware_file = NULL;
+    int dfc_mode = 1;
     double samplerate = 32e6;
     double reference_clock = 27e6;
     double reference_ppm = 0;
@@ -41,10 +42,16 @@ int main(int argc, char *argv[])
     int write_fileno = -1;
 
     int opt;
-    while ((opt = getopt(argc, argv, "f:s:x:c:i:e:r:q:t:o:CH")) != -1) {
+    while ((opt = getopt(argc, argv, "f:m:s:x:c:i:e:r:q:t:o:CH")) != -1) {
         switch (opt) {
         case 'f':
             firmware_file = optarg;
+            break;
+        case 'm':
+            if (sscanf(optarg, "%d", &dfc_mode) != 1) {
+                fprintf(stderr, "invalid DFC mode: %s\n", optarg);
+                return EXIT_FAILURE;
+            }
             break;
         case 's':
             if (sscanf(optarg, "%lf", &samplerate) != 1) {
@@ -113,6 +120,9 @@ int main(int argc, char *argv[])
         case 'H':
             show_histogram = true;
             break;
+        case '?':
+            /* invalid option */
+            return EXIT_FAILURE;
         }
     }
 
@@ -140,6 +150,19 @@ int main(int argc, char *argv[])
     }
 
     if (!cypress_example) {
+        if (dfc_mode > 0) {
+            const uint8_t SETMODE = 0x90;
+            uint8_t data = dfc_mode;
+            status = usb_control_write(&dfc.usb_device, SETMODE, &data, sizeof(data));
+            if (status != 0) {
+                fprintf(stderr, "set DFC mode to %d failed\n", dfc_mode);
+                return -1;
+            }
+        }
+
+        /* wait a few ms before using the new mode */
+        usleep(10000);
+
         status = clock_start(&dfc.clock, &dfc.usb_device, reference_clock * (1.0 + 1e-6 * reference_ppm), samplerate);
         if (status == -1) {
             return EXIT_FAILURE;
@@ -152,49 +175,49 @@ int main(int argc, char *argv[])
         }
     }
 
-    stream_t stream;
-
-    status = stream_init(&stream, &dfc.usb_device, reqsize, queuedepth, show_histogram, write_fileno);
-    if (status == -1) {
-        usb_close(&dfc.usb_device);
-        return EXIT_FAILURE;
-    }
-
-    struct sigaction sigact;
-
-    sigact.sa_handler = sig_stop;
-    sigemptyset(&sigact.sa_mask);
-    sigact.sa_flags = 0;
-    (void)sigaction(SIGINT, &sigact, NULL);
-    (void)sigaction(SIGTERM, &sigact, NULL);
-    ( void)sigaction(SIGALRM, &sigact, NULL);
-
-    status = stream_start(&stream);
-    if (status == -1) {
-        usb_close(&dfc.usb_device);
-        return EXIT_FAILURE;
-    }
-
     if (duration > 0) {
+        stream_t stream;
+
+        status = stream_init(&stream, &dfc.usb_device, reqsize, queuedepth, show_histogram, write_fileno);
+        if (status == -1) {
+            usb_close(&dfc.usb_device);
+            return EXIT_FAILURE;
+        }
+
+        struct sigaction sigact;
+
+        sigact.sa_handler = sig_stop;
+        sigemptyset(&sigact.sa_mask);
+        sigact.sa_flags = 0;
+        (void)sigaction(SIGINT, &sigact, NULL);
+        (void)sigaction(SIGTERM, &sigact, NULL);
+        ( void)sigaction(SIGALRM, &sigact, NULL);
+
+        status = stream_start(&stream);
+        if (status == -1) {
+            usb_close(&dfc.usb_device);
+            return EXIT_FAILURE;
+        }
+
         alarm(duration);
-    }
 
-    while (!stop_transfers) {
-        libusb_handle_events(NULL);
-    }
+        while (!stop_transfers) {
+            libusb_handle_events(NULL);
+        }
 
-    status = stream_stop(&stream);
-    if (status == -1) {
-        usb_close(&dfc.usb_device);
-        return EXIT_FAILURE;
-    }
+        status = stream_stop(&stream);
+        if (status == -1) {
+            usb_close(&dfc.usb_device);
+            return EXIT_FAILURE;
+        }
 
-    stream_stats(duration);
+        stream_stats(duration);
 
-    status = stream_fini(&stream);
-    if (status == -1) {
-        usb_close(&dfc.usb_device);
-        return EXIT_FAILURE;
+        status = stream_fini(&stream);
+        if (status == -1) {
+            usb_close(&dfc.usb_device);
+            return EXIT_FAILURE;
+        }
     }
 
     if (!cypress_example) {

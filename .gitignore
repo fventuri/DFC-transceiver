@@ -1,6 +1,7 @@
 *.o
 *.elf
 *.map
+elf2img
 streaming-client
 old/
 *.old

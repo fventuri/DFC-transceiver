@@ -14,6 +14,7 @@
 // useful constants
 static const USHORT fx3_streamer_example[] = { 0x04b4, 0x00f1 };
 static const USHORT fx3_dfu_mode[]         = { 0x04b4, 0x00f3 };
+static const UCHAR SETMODE  = 0x90;
 static const UCHAR STARTADC = 0xb2;
 static const UCHAR STARTFX3 = 0xaa;
 static const UCHAR STOPFX3  = 0xab;
@@ -45,6 +46,7 @@ volatile bool stopTransfers = false;
 int main(int argc, char *argv[])
 {
     char *firmware_file = NULL;
+    int dfc_mode = 1;
     double samplerate = 32e6;
     double reference_clock = 27e6;
     double reference_ppm = 0;
@@ -59,10 +61,16 @@ int main(int argc, char *argv[])
     bool show_histogram = false;
 
     int opt;
-    while ((opt = getopt(argc, argv, "f:s:x:c:i:e:r:q:t:o:CH")) != -1) {
+    while ((opt = getopt(argc, argv, "f:m:s:x:c:i:e:r:q:t:o:CH")) != -1) {
         switch (opt) {
         case 'f':
             firmware_file = optarg;
+            break;
+        case 'm':
+            if (sscanf(optarg, "%d", &dfc_mode) != 1) {
+                fprintf(stderr, "invalid DFC mode: %s\n", optarg);
+                return EXIT_FAILURE;
+            }
             break;
         case 's':
             if (sscanf(optarg, "%lf", &samplerate) != 1) {
@@ -127,6 +135,9 @@ int main(int argc, char *argv[])
         case 'H':
             show_histogram = true;
             break;
+        case '?':
+            /* invalid option */
+            return EXIT_FAILURE;
         }
     }
 
@@ -138,80 +149,56 @@ int main(int argc, char *argv[])
     // look for streamer device first; if found, use that
     CCyUSBDevice *usbDevice = new CCyUSBDevice(NULL);
     if (!open_usb_device_with_vid_pid(usbDevice, fx3_streamer_example[0], fx3_streamer_example[1])) {
-         fprintf(stderr, "FX3 streamer example not found - trying FX3 in DFU mode\n");
-         CCyFX3Device *fx3Device = new CCyFX3Device();
-         if (!open_usb_device_with_vid_pid(fx3Device, fx3_dfu_mode[0], fx3_dfu_mode[1])) {
-             fprintf(stderr, "FX3 in DFU mode not found\n");
-             return 1;
-         }
-         if (!fx3Device->IsBootLoaderRunning()) {
-             fprintf(stderr, "Bootloader not running in FX3 in DFU mode\n");
-             return 1;
-         }
-         fprintf(stderr, "upload FX3 firmware\n");
-         FX3_FWDWNLOAD_ERROR_CODE status = fx3Device->DownloadFw(firmware_file, RAM);
-         if (status != SUCCESS) {
-             fprintf(stderr, "FX3 firmware upload failed - status=%d\n", status);
-             return 1;
-         }
+        fprintf(stderr, "FX3 streamer example not found - trying FX3 in DFU mode\n");
+        CCyFX3Device *fx3Device = new CCyFX3Device();
+        if (!open_usb_device_with_vid_pid(fx3Device, fx3_dfu_mode[0], fx3_dfu_mode[1])) {
+            fprintf(stderr, "FX3 in DFU mode not found\n");
+            return 1;
+        }
+        if (!fx3Device->IsBootLoaderRunning()) {
+            fprintf(stderr, "Bootloader not running in FX3 in DFU mode\n");
+            return 1;
+        }
+        fprintf(stderr, "upload FX3 firmware\n");
+        FX3_FWDWNLOAD_ERROR_CODE status = fx3Device->DownloadFw(firmware_file, RAM);
+        if (status != SUCCESS) {
+            fprintf(stderr, "FX3 firmware upload failed - status=%d\n", status);
+            return 1;
+        }
 
-         // loog again for streamer device
-         bool streamer_device_found = false;
-         for (int retry = 0; retry < 10; retry++) {
-             if (open_usb_device_with_vid_pid(usbDevice, fx3_streamer_example[0], fx3_streamer_example[1])) {
-                 streamer_device_found = true;
-                 fprintf(stderr, "FX3 firmware upload OK (retry=%d)\n", retry);
-                 break;
-             }
-             std::this_thread::sleep_for(std::chrono::milliseconds(100)); // wait 100ms before checking again
-         }
-         if (!streamer_device_found) {
-             fprintf(stderr, "FX3 firmware upload failed - FX3 streamer example not found\n");
-             return 1;
-         }
-    }
-
-    // timer queue
-    HANDLE timerQueue = CreateTimerQueue();
-    if (timerQueue == NULL) {
-        fprintf(stderr, "CreateTimerQueue failed - error=%d\n", GetLastError());
-        return 1;
-    }
-
-    CCyBulkEndPoint *endPt = usbDevice->BulkInEndPt;
-    long pktSize = endPt->MaxPktSize;
-    long transferSize = reqsize * pktSize;
-    endPt->SetXferSize(transferSize);
-    fprintf(stderr, "buffer transfer size = %ld - packet size = %ld\n", transferSize, pktSize);
-
-    typedef struct {
-        UINT8 *buffer;
-        OVERLAPPED overlap;
-        UCHAR *context;
-    } transfer_t;
-
-    // prepare transfers
-    transfer_t *transfers = (transfer_t *) malloc(queuedepth * sizeof(transfer_t));
-    for (int i = 0; i < queuedepth; i++) {
-        transfer_t *transfer = &transfers[i];
-        transfer->buffer = (UINT8 *) malloc(transferSize);
-        ZeroMemory(&transfer->overlap, sizeof(OVERLAPPED));
-        transfer->overlap.hEvent = CreateEvent(NULL, false, false, NULL);
-        transfer->context = endPt->BeginDataXfer(transfer->buffer, transferSize, &transfer->overlap);
-    }
-
-    if (show_histogram) {
-        histogramEven = (unsigned long long *) malloc(SIXTEEN_BITS_SIZE * sizeof(unsigned long long));
-        histogramOdd = (unsigned long long *) malloc(SIXTEEN_BITS_SIZE * sizeof(unsigned long long));
-        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
-            histogramEven[i] = 0;
-        }   
-        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
-            histogramOdd[i] = 0;
+        // look again for streamer device
+        bool streamer_device_found = false;
+        for (int retry = 0; retry < 10; retry++) {
+            if (open_usb_device_with_vid_pid(usbDevice, fx3_streamer_example[0], fx3_streamer_example[1])) {
+                streamer_device_found = true;
+                fprintf(stderr, "FX3 firmware upload OK (retry=%d)\n", retry);
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100)); // wait 100ms before checking again
+        }
+        if (!streamer_device_found) {
+            fprintf(stderr, "FX3 firmware upload failed - FX3 streamer example not found\n");
+            return 1;
         }
     }
 
     if (!cypress_example) {
+        // set DFC mode
+        usbDevice->ControlEndPt->Target  = TGT_DEVICE;
+        usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
+        usbDevice->ControlEndPt->ReqCode = SETMODE;
+        usbDevice->ControlEndPt->Value   = 0;
+        usbDevice->ControlEndPt->Index   = 0;
+        UCHAR dataByte = dfc_mode;
+        LONG dataByteSize = sizeof(dataByte);
+        if (!usbDevice->ControlEndPt->Write(&dataByte, dataByteSize)) {
+            fprintf(stderr, "FX3 control SETMODE command failed\n");
+            return 1;
+        }
+
+        /* wait a few ms before using the new mode */
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
         // start ADC clock
         usbDevice->ControlEndPt->Target  = TGT_DEVICE;
         usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
@@ -238,72 +225,116 @@ int main(int argc, char *argv[])
         }
     }
 
-    stopTransfers = false;
-
-    HANDLE timer = NULL;
     if (duration > 0) {
+        // timer queue
+        HANDLE timerQueue = CreateTimerQueue();
+        if (timerQueue == NULL) {
+            fprintf(stderr, "CreateTimerQueue failed - error=%d\n", GetLastError());
+            return 1;
+        }
+
+        CCyBulkEndPoint *endPt = usbDevice->BulkInEndPt;
+        long pktSize = endPt->MaxPktSize;
+        long transferSize = reqsize * pktSize;
+        endPt->SetXferSize(transferSize);
+        fprintf(stderr, "buffer transfer size = %ld - packet size = %ld\n", transferSize, pktSize);
+
+        typedef struct {
+            UINT8 *buffer;
+            OVERLAPPED overlap;
+            UCHAR *context;
+        } transfer_t;
+
+        // prepare transfers
+        transfer_t *transfers = (transfer_t *) malloc(queuedepth * sizeof(transfer_t));
+        for (int i = 0; i < queuedepth; i++) {
+            transfer_t *transfer = &transfers[i];
+            transfer->buffer = (UINT8 *) malloc(transferSize);
+            ZeroMemory(&transfer->overlap, sizeof(OVERLAPPED));
+            transfer->overlap.hEvent = CreateEvent(NULL, false, false, NULL);
+            transfer->context = endPt->BeginDataXfer(transfer->buffer, transferSize, &transfer->overlap);
+        }
+
+        if (show_histogram) {
+            histogramEven = (unsigned long long *) malloc(SIXTEEN_BITS_SIZE * sizeof(unsigned long long));
+            histogramOdd = (unsigned long long *) malloc(SIXTEEN_BITS_SIZE * sizeof(unsigned long long));
+            for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+                histogramEven[i] = 0;
+            }
+            for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+                histogramOdd[i] = 0;
+            }
+        }
+
+        stopTransfers = false;
+
+        HANDLE timer = NULL;
         if (!CreateTimerQueueTimer(&timer, timerQueue, (WAITORTIMERCALLBACK)doStopTransfers, NULL, duration * 1000, 0, 0)) {
             fprintf(stderr, "CreateTimerQueueTimer failed - error=%d\n", GetLastError());
             return 1;
         }
-    }
 
-    // main transfer loop
-    while (true) {
-        bool doStopTransfers = stopTransfers;
-        for (int i = 0; i < queuedepth; i++) {
-            transfer_t *transfer = &transfers[i];
-            if (!endPt->WaitForXfer(&transfer->overlap, TRANSFER_TIMEOUT)) {
-                fprintf(stderr, "WaitForXfer() timeout - NtStatus=0x%08x\n", endPt->NtStatus);
-                endPt->Abort();
-                stopTransfers = true;
-                failureCount++;
-                break;
-            }
-            if (!endPt->FinishDataXfer(transfer->buffer, transferSize, &transfer->overlap, transfer->context)) {
-                fprintf(stderr, "FinishDataXfer() failed - NtStatus=0x%08x\n", endPt->NtStatus);
-                endPt->Abort();
-                stopTransfers = true;
-                failureCount++;
-                break;
-            }
-
-            successCount++;
-            streamCallback(transfer->buffer, transferSize);
-
-            if (!doStopTransfers) {
-                // requeue the transfer
-                transfer->context = endPt->BeginDataXfer(transfer->buffer, transferSize, &transfer->overlap);
-                if (transfer->context == NULL) {
-                    fprintf(stderr, "BeginDataXfer() failed - NtStatus=0x%08x\n", endPt->NtStatus);
+        // main transfer loop
+        while (true) {
+            bool doStopTransfers = stopTransfers;
+            for (int i = 0; i < queuedepth; i++) {
+                transfer_t *transfer = &transfers[i];
+                if (!endPt->WaitForXfer(&transfer->overlap, TRANSFER_TIMEOUT)) {
+                    fprintf(stderr, "WaitForXfer() timeout - NtStatus=0x%08x\n", endPt->NtStatus);
                     endPt->Abort();
                     stopTransfers = true;
                     failureCount++;
                     break;
                 }
+                if (!endPt->FinishDataXfer(transfer->buffer, transferSize, &transfer->overlap, transfer->context)) {
+                    fprintf(stderr, "FinishDataXfer() failed - NtStatus=0x%08x\n", endPt->NtStatus);
+                    endPt->Abort();
+                    stopTransfers = true;
+                    failureCount++;
+                    break;
+                }
+
+                successCount++;
+                streamCallback(transfer->buffer, transferSize);
+
+                if (!doStopTransfers) {
+                    // requeue the transfer
+                    transfer->context = endPt->BeginDataXfer(transfer->buffer, transferSize, &transfer->overlap);
+                    if (transfer->context == NULL) {
+                        fprintf(stderr, "BeginDataXfer() failed - NtStatus=0x%08x\n", endPt->NtStatus);
+                        endPt->Abort();
+                        stopTransfers = true;
+                        failureCount++;
+                        break;
+                    }
+                }
+            }
+
+            if (doStopTransfers) {
+                break;
             }
         }
 
-        if (doStopTransfers) {
-            break;
+        streamStats(duration);
+
+        // clean up transfers
+        for (int i = 0; i < queuedepth; i++) {
+            transfer_t *transfer = &transfers[i];
+            CloseHandle(transfer->overlap.hEvent);
+            free(transfer->buffer);
         }
-    }
+        free(transfers);
 
-    streamStats(duration);
+        if (histogramEven != NULL) {
+            free(histogramEven);
+        }
+        if (histogramOdd != NULL) {
+            free(histogramOdd);
+        }
 
-    // clean up transfers
-    for (int i = 0; i < queuedepth; i++) {
-        transfer_t *transfer = &transfers[i];
-        CloseHandle(transfer->overlap.hEvent);
-        free(transfer->buffer);
-    }
-    free(transfers);
-
-    if (histogramEven != NULL) {
-        free(histogramEven);
-    }       
-    if (histogramOdd != NULL) {
-        free(histogramOdd);
+        if (!DeleteTimerQueue(timerQueue)) {
+            fprintf(stderr, "DeleteTimerQueue failed - error=%d\n", GetLastError());
+        }
     }
 
     if (!cypress_example) {
@@ -321,10 +352,6 @@ int main(int argc, char *argv[])
     }
 
     write_ostream.close();
-
-    if (!DeleteTimerQueue(timerQueue)) {
-        fprintf(stderr, "DeleteTimerQueue failed - error=%d\n", GetLastError());
-    }
 
     return 0;
 }
@@ -363,11 +390,11 @@ static void streamCallback(UINT8 *buffer, long length)
         for (int i = 0; i < nsamples; i += 2) {
             histogramEven[samples[i] + SIXTEEN_BITS_SIZE / 2]++;
         }
-    }   
+    }
     if (histogramOdd != NULL) {
         for (int i = 1; i < nsamples; i += 2) {
             histogramOdd[samples[i] + SIXTEEN_BITS_SIZE / 2]++;
-        }       
+        }
     }
 
     if (write_ostream.is_open()) {
