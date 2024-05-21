@@ -202,25 +202,54 @@ const uint8_t CyFxUSBStringLangIDDscr[] __attribute__ ((aligned (32))) =
 /* Standard manufacturer string descriptor */
 const uint8_t CyFxUSBManufactureDscr[] __attribute__ ((aligned (32))) =
 {
-    0x10,                           /* Descriptor size */
+    0x32,                           /* Descriptor size */
     CY_U3P_USB_STRING_DESCR,        /* Device descriptor type */
-    'C',0x00,
-    'y',0x00,
-    'p',0x00,
+    'P',0x00,
+    'h',0x00,
+    'i',0x00,
+    'l',0x00,
+    ' ',0x00,
+    'H',0x00,
+    'a',0x00,
     'r',0x00,
-    'e',0x00,
+    'm',0x00,
+    'a',0x00,
+    'n',0x00,
+    ',',0x00,
+    ' ',0x00,
+    'J',0x00,
+    'u',0x00,
     's',0x00,
-    's',0x00
+    't',0x00,
+    'i',0x00,
+    'n',0x00,
+    ' ',0x00,
+    'P',0x00,
+    'e',0x00,
+    'n',0x00,
+    'g',0x00
 };
 
 /* Standard product string descriptor */
 const uint8_t CyFxUSBProductDscr[] __attribute__ ((aligned (32))) =
 {
-    0x08,                           /* Descriptor size */
+    0x20,                           /* Descriptor size */
     CY_U3P_USB_STRING_DESCR,        /* Device descriptor type */
+    'D',0x00,
     'F',0x00,
-    'X',0x00,
-    '3',0x00
+    'C',0x00,
+    ' ',0x00,
+    'T',0x00,
+    'r',0x00,
+    'a',0x00,
+    'n',0x00,
+    's',0x00,
+    'c',0x00,
+    'e',0x00,
+    'i',0x00,
+    'v',0x00,
+    'e',0x00,
+    'r',0x00
 };
 
 /* Microsoft OS Descriptor. */
