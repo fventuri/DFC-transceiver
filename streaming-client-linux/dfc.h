@@ -8,11 +8,11 @@
 #define _STREAMING_CLIENT_DFC_H_
 
 #include "usb.h"
-#include "klock.h"
+#include "clock.h"
 
 typedef struct {
     usb_device_t usb_device;
-    klock_t clock;
+    dfcclock_t clock;
 } dfc_t;
 
 int dfc_fx3_start(dfc_t *this);

@@ -14,7 +14,7 @@
 - open a new Visual Studio Developer terminal: Start -> Visual Studio 2022 -> Developer Command Prompt for VS22
 - in that terminal run these commands:
 ```
-cd streaming-client\windows
+cd streaming-client-windows
 mkdir build
 cd build
 cmake -G "Visual Studio 17 2022" -A x64 ..
@@ -27,12 +27,12 @@ The streaming client executable will be under build\Release\streaming-client.exe
 
 ## How to run it
 
-Stream using DFC firmware for 20 seconds in single ADC mode (sample rate=100MHz):
+Stream (RX) from the DFC transceiver for 20 seconds in single ADC mode (sample rate=100MHz):
 ```
 build\Release\streaming-client.exe -f fx3-firmware.img -m 1 -s 100e6 -t 20
 ```
 
-Stream using DFC firmware for 20 seconds in dual ADC mode (sample rate=100MHz):
+Stream (RX) from the DFC transceiver for 20 seconds in dual ADC mode (sample rate=100MHz):
 ```
 build\Release\streaming-client.exe -f fx3-firmware.img -m 2 -s 100e6 -t 20
 ```

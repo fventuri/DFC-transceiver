@@ -8,8 +8,8 @@ add_compile_options(-Wall -Wextra -pedantic -Werror)
 
 set(SOURCE_FILES
     streaming-client.c
+    clock.c
     dfc.c
-    klock.c
     stream.c
     usb.c
 )

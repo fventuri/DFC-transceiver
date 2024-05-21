@@ -4,11 +4,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#include "klock.h"
+#include "clock.h"
 
 #include <stdio.h>
 
-int clock_start(__attribute__ ((unused)) klock_t *this, usb_device_t *usb_device, double reference, double samplerate)
+int clock_start(__attribute__ ((unused)) dfcclock_t *this, usb_device_t *usb_device, double reference, double samplerate)
 {
     const uint8_t STARTADC = 0xb2;
 
