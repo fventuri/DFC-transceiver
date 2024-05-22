@@ -8,7 +8,6 @@
 #include "cyu3system.h"
 #include "cyu3error.h"
 #include "cyu3pib.h"
-#include "cyu3pib.h"
 
 #include "app.h"
 #include "gpif.h"

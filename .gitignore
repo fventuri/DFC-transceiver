@@ -1,3 +1,5 @@
+cyfx_gcc_startup.S
+cyfxtx.c
 *.o
 *.elf
 *.map
@@ -7,3 +9,4 @@ old/
 *.old
 build/
 private/
+fvtest*
