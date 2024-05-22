@@ -13,6 +13,8 @@
 #include "cyu3usbconst.h"
 #include "cyu3externcstart.h"
 
+#define DEVICE_RELEASE_NUMBER              0x01,0x00            /* USB device release number (bcdDevice) minor,major */
+
 #define CY_FX_GPIFTOUSB_DMA_TX_SIZE        (0)                  /* DMA transfer size is set to infinite */
 #define CY_FX_GPIFTOUSB_THREAD_STACK       (0x1000)             /* Bulk loop application thread stack size */
 #define CY_FX_GPIFTOUSB_THREAD_PRIORITY    (8)                  /* Bulk loop application thread priority */
