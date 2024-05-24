@@ -15,6 +15,8 @@ typedef struct {
     dfcclock_t clock;
 } dfc_t;
 
+const uint8_t* dfc_fx3_get_fw_version(dfc_t *this);
+uint8_t dfc_fx3_get_mode(dfc_t *this);
 int dfc_fx3_start(dfc_t *this);
 int dfc_fx3_stop(dfc_t *this);
 

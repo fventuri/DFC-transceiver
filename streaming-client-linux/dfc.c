@@ -8,6 +8,36 @@
 
 #include <stdio.h>
 
+const uint8_t* dfc_fx3_get_fw_version(dfc_t *this)
+{
+    static uint8_t fw_version[64];
+    const uint8_t GETFWVERSION = 0x01;
+
+    int status;
+    status = usb_control_read(&this->usb_device, GETFWVERSION, fw_version, sizeof(fw_version));
+    if (status != 0) {
+        fprintf(stderr, "dfc_fx3_get_fw_version() failed\n");
+        return NULL;
+    }
+
+    return fw_version;
+}
+
+uint8_t dfc_fx3_get_mode(dfc_t *this)
+{
+    uint8_t dfc_mode;
+    const uint8_t GETMODE = 0x10;
+
+    int status;
+    status = usb_control_read(&this->usb_device, GETMODE, &dfc_mode, sizeof(dfc_mode));
+    if (status != 0) {
+        fprintf(stderr, "dfc_fx3_get_mode() failed\n");
+        return (uint8_t)-1;
+    }
+
+    return dfc_mode;
+}
+
 int dfc_fx3_start(dfc_t *this)
 {
     const uint8_t STARTFX3 = 0xaa;

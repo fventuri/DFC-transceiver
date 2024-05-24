@@ -23,6 +23,7 @@
 #include "usb.h"
 
 CyU3PThread glAppThread;            /* Application thread structure */
+uint8_t glCurrentDFCModeIndex;      /* Current DFC operating mode index */
 DFCMode *glCurrentDFCMode;          /* Current DFC operating mode */
 
 CyBool_t glIsApplnActive = CyFalse;     /* Whether the application is active or not. */
@@ -37,7 +38,7 @@ volatile double glStartAdcReference = 0.0;
 volatile double glStartAdcFrequency = 0.0;
 
 /* internal functions */
-static void SetDFCMode(uint8_t dfcMode);
+static void SetDFCMode(uint8_t dfcModeIndex);
 static void StartFx3();
 static void StopFx3();
 
@@ -133,6 +134,9 @@ CyFxApplnUSBSetupCB (
     CyBool_t isHandled = CyFalse;
     CyU3PReturnStatus_t status;
 
+    /* FX3 fw version is just the build timestamp for now */
+    uint8_t fwVersion[] = __TIMESTAMP__;
+
     /* Decode the fields from the setup request. */
     bReqType = (setupdat0 & CY_U3P_USB_REQUEST_TYPE_MASK);
     bType    = (bReqType & CY_U3P_USB_TYPE_MASK);
@@ -149,8 +153,25 @@ CyFxApplnUSBSetupCB (
          */
         switch (bRequest)
         {
+            case 0x01: /* DFC - GETFWVERSION */
+                status = CyU3PUsbSendEP0Data (sizeof(fwVersion), fwVersion);
+                if (status != CY_U3P_SUCCESS)
+                {
+                    CyU3PDebugPrint (2, "Send data failed\r\n");
+                }
+                CyU3PUsbAckSetup ();
+                isHandled = CyTrue; 
+                break;
+
             case 0x10: /* DFC - GETMODE */
-                /* TODO */
+                status = CyU3PUsbSendEP0Data (sizeof(glCurrentDFCModeIndex), &glCurrentDFCModeIndex);
+                if (status != CY_U3P_SUCCESS)
+                {
+                    CyU3PDebugPrint (2, "Send data failed\r\n");
+                }
+                CyU3PUsbAckSetup ();
+                isHandled = CyTrue; 
+                break;
 
             case 0x90: /* DFC - SETMODE */
                 status = CyU3PUsbGetEP0Data (wLength, glEp0Buffer, NULL);
@@ -158,9 +179,9 @@ CyFxApplnUSBSetupCB (
                 {
                     CyU3PDebugPrint (2, "Get data failed\r\n");
                 }
-                uint8_t dfcMode = glEp0Buffer[0];
-                if (dfcMode < NumDFCModes && DFCModes[dfcMode] != glCurrentDFCMode) {
-                    glSetDFCModeRqt = dfcMode;
+                uint8_t dfcModeIndex = glEp0Buffer[0];
+                if (dfcModeIndex < NumDFCModes && dfcModeIndex != glCurrentDFCModeIndex) {
+                    glSetDFCModeRqt = dfcModeIndex;
                 }
                 CyU3PUsbAckSetup ();
                 isHandled = CyTrue;
@@ -330,7 +351,8 @@ CyFxAppThread_Entry (
     CyU3PUsbLinkPowerMode curState;
 
     /* start running DFC operating mode 0 (UART_ONLY) */
-    glCurrentDFCMode = DFCModes[0];
+    glCurrentDFCModeIndex = 0;
+    glCurrentDFCMode = DFCModes[glCurrentDFCModeIndex];
 
     glCurrentDFCMode->Init();
     CyU3PDebugPrint (4, "DFC operating mode: %s\r\n", glCurrentDFCMode->name);
@@ -357,9 +379,9 @@ CyFxAppThread_Entry (
 
         if (glSetDFCModeRqt != (uint8_t)-1)
         {
-            uint8_t dfcMode = glSetDFCModeRqt;
+            uint8_t dfcModeIndex = glSetDFCModeRqt;
             glSetDFCModeRqt = -1;
-            SetDFCMode(dfcMode);
+            SetDFCMode(dfcModeIndex);
         }
 
         if (glStartFx3Rqt)
@@ -471,18 +493,19 @@ handle_fatal_error:
 
 
 /* internal functions */
-static void SetDFCMode(uint8_t dfcMode)
+static void SetDFCMode(uint8_t dfcModeIndex)
 {
-    if (dfcMode >= NumDFCModes) {
-        CyU3PDebugPrint (4, "Invalid DFC operating mode: %u\r\n", dfcMode);
+    if (dfcModeIndex >= NumDFCModes) {
+        CyU3PDebugPrint (4, "Invalid DFC operating mode: %u\r\n", dfcModeIndex);
         return;
     }
 
-    CyU3PDebugPrint (4, "Set new DFC operating mode: %u\r\n", dfcMode);
+    CyU3PDebugPrint (4, "Set new DFC operating mode: %u\r\n", dfcModeIndex);
     CyU3PThreadSleep (10);
 
     glCurrentDFCMode->DeInit();
-    glCurrentDFCMode = DFCModes[dfcMode];
+    glCurrentDFCModeIndex = dfcModeIndex;
+    glCurrentDFCMode = DFCModes[glCurrentDFCModeIndex];
     glCurrentDFCMode->Init();
 
     CyU3PDebugPrint (4, "DFC operating mode: %s\r\n", glCurrentDFCMode->name);

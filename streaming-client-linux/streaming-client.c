@@ -150,6 +150,8 @@ int main(int argc, char *argv[])
     }
 
     if (!cypress_example) {
+        fprintf(stderr, "DFC FW version: %s\n", dfc_fx3_get_fw_version(&dfc));
+
         if (dfc_mode > 0) {
             const uint8_t SETMODE = 0x90;
             uint8_t data = dfc_mode;
@@ -161,7 +163,9 @@ int main(int argc, char *argv[])
         }
 
         /* wait a few ms before using the new mode */
-        usleep(10000);
+        usleep(20000);
+
+        fprintf(stderr, "DFC mode: %hhu\n", dfc_fx3_get_mode(&dfc));
 
         status = clock_start(&dfc.clock, &dfc.usb_device, reference_clock * (1.0 + 1e-6 * reference_ppm), samplerate);
         if (status == -1) {

@@ -14,10 +14,12 @@
 // useful constants
 static const USHORT fx3_streamer_example[] = { 0x04b4, 0x00f1 };
 static const USHORT fx3_dfu_mode[]         = { 0x04b4, 0x00f3 };
-static const UCHAR SETMODE  = 0x90;
-static const UCHAR STARTADC = 0xb2;
-static const UCHAR STARTFX3 = 0xaa;
-static const UCHAR STOPFX3  = 0xab;
+static const UCHAR GETFWVERSION  = 0x01;
+static const UCHAR GETMODE       = 0x10;
+static const UCHAR SETMODE       = 0x90;
+static const UCHAR STARTADC      = 0xb2;
+static const UCHAR STARTFX3      = 0xaa;
+static const UCHAR STOPFX3       = 0xab;
 static const ULONG TRANSFER_TIMEOUT = 100;  // transfer timeout in ms
 
 // internal functions
@@ -183,6 +185,20 @@ int main(int argc, char *argv[])
     }
 
     if (!cypress_example) {
+        // get FW version
+        usbDevice->ControlEndPt->Target  = TGT_DEVICE;
+        usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
+        usbDevice->ControlEndPt->ReqCode = GETFWVERSION;
+        usbDevice->ControlEndPt->Value   = 0;
+        usbDevice->ControlEndPt->Index   = 0;
+        UCHAR fwVersion[64];
+        LONG fwVersionSize = sizeof(fwVersion);
+        if (!usbDevice->ControlEndPt->Read(fwVersion, fwVersionSize)) {
+            fprintf(stderr, "FX3 control GETFWVERSION command failed\n");
+            return 1;
+        }
+        fprintf(stderr, "DFC FW version: %s\n", fwVersion);
+
         // set DFC mode
         usbDevice->ControlEndPt->Target  = TGT_DEVICE;
         usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
@@ -198,6 +214,20 @@ int main(int argc, char *argv[])
 
         /* wait a few ms before using the new mode */
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+        // get DFC mode
+        usbDevice->ControlEndPt->Target  = TGT_DEVICE;
+        usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
+        usbDevice->ControlEndPt->ReqCode = GETMODE;
+        usbDevice->ControlEndPt->Value   = 0;
+        usbDevice->ControlEndPt->Index   = 0;
+        UCHAR dfcMode;
+        LONG dfcModeSize = sizeof(dfcMode);
+        if (!usbDevice->ControlEndPt->Read(&dfcMode, dfcModeSize)) {
+            fprintf(stderr, "FX3 control GETMODE command failed\n");
+            return 1;
+        }
+        fprintf(stderr, "DFC mode: %hhu\n", dfcMode);
 
         // start ADC clock
         usbDevice->ControlEndPt->Target  = TGT_DEVICE;
