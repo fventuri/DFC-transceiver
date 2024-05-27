@@ -2,89 +2,89 @@
 <Root version="4">
   <CyStates>
     <CyNormalState>
-      <Left>874</Left>
-      <Top>239.446666666667</Top>
+      <Left>567</Left>
+      <Top>211.446666666667</Top>
       <Width>83</Width>
       <Height>70</Height>
       <Name>STATE1</Name>
-      <DisplayName>TH0_RD</DisplayName>
+      <DisplayName>PING_LOOP</DisplayName>
       <zIndex>1</zIndex>
       <IsGroup>False</IsGroup>
       <ParentID>00000000-0000-0000-0000-000000000000</ParentID>
     </CyNormalState>
     <CyNormalState>
-      <Left>543</Left>
-      <Top>240</Top>
+      <Left>414</Left>
+      <Top>210</Top>
       <Width>83</Width>
       <Height>70</Height>
       <Name>STATE5</Name>
-      <DisplayName>TH0_RD_LD</DisplayName>
+      <DisplayName>PING_INIT</DisplayName>
       <zIndex>1</zIndex>
       <IsGroup>False</IsGroup>
       <ParentID>00000000-0000-0000-0000-000000000000</ParentID>
     </CyNormalState>
     <CyNormalState>
-      <Left>882</Left>
-      <Top>470.723333333333</Top>
+      <Left>563</Left>
+      <Top>398.723333333333</Top>
       <Width>83</Width>
       <Height>70</Height>
       <Name>STATE0</Name>
-      <DisplayName>TH1_RD_LD</DisplayName>
+      <DisplayName>PONG_INIT</DisplayName>
       <zIndex>1</zIndex>
       <IsGroup>False</IsGroup>
       <ParentID>00000000-0000-0000-0000-000000000000</ParentID>
     </CyNormalState>
     <CyNormalState>
-      <Left>532</Left>
-      <Top>491.723333333333</Top>
+      <Left>409</Left>
+      <Top>400.723333333333</Top>
       <Width>83</Width>
       <Height>70</Height>
       <Name>STATE2</Name>
-      <DisplayName>TH1_RD</DisplayName>
+      <DisplayName>PONG_LOOP</DisplayName>
       <zIndex>1</zIndex>
       <IsGroup>False</IsGroup>
       <ParentID>00000000-0000-0000-0000-000000000000</ParentID>
     </CyNormalState>
     <CyNormalState>
-      <Left>1094</Left>
-      <Top>318.723333333333</Top>
+      <Left>726.307692307692</Left>
+      <Top>395.723333333333</Top>
       <Width>83</Width>
       <Height>70</Height>
       <Name>STATE3</Name>
-      <DisplayName>TH1_BUSY</DisplayName>
+      <DisplayName>PONG_DMA_BUSY</DisplayName>
       <zIndex>1</zIndex>
       <IsGroup>False</IsGroup>
       <ParentID>00000000-0000-0000-0000-000000000000</ParentID>
     </CyNormalState>
     <CyNormalState>
-      <Left>479</Left>
-      <Top>70.723333333333</Top>
+      <Left>421</Left>
+      <Top>66.723333333333</Top>
       <Width>83</Width>
       <Height>70</Height>
       <Name>STATE4</Name>
-      <DisplayName>TH0_BUSY</DisplayName>
+      <DisplayName>PING_DMA_BUSY</DisplayName>
       <zIndex>1</zIndex>
       <IsGroup>False</IsGroup>
       <ParentID>00000000-0000-0000-0000-000000000000</ParentID>
     </CyNormalState>
     <CyNormalState>
-      <Left>1093</Left>
-      <Top>494.723333333333</Top>
+      <Left>712.267654256584</Left>
+      <Top>265.723333333333</Top>
       <Width>83</Width>
       <Height>70</Height>
       <Name>STATE6</Name>
-      <DisplayName>TH1_WAIT</DisplayName>
+      <DisplayName>PONG_DMA_WAIT</DisplayName>
       <zIndex>1</zIndex>
       <IsGroup>False</IsGroup>
       <ParentID>00000000-0000-0000-0000-000000000000</ParentID>
     </CyNormalState>
     <CyNormalState>
-      <Left>623</Left>
-      <Top>68.723333333333</Top>
+      <Left>566</Left>
+      <Top>66.723333333333</Top>
       <Width>83</Width>
       <Height>70</Height>
       <Name>STATE7</Name>
-      <DisplayName>TH0_WAIT</DisplayName>
+      <DisplayName>PING_DMA_WAIT</DisplayName>
       <zIndex>1</zIndex>
       <IsGroup>False</IsGroup>
       <ParentID>00000000-0000-0000-0000-000000000000</ParentID>

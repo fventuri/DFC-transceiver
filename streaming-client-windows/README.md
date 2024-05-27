@@ -29,10 +29,10 @@ The streaming client executable will be under build\Release\streaming-client.exe
 
 Stream (RX) from the DFC transceiver for 20 seconds in single ADC mode (sample rate=100MHz):
 ```
-build\Release\streaming-client.exe -f fx3-firmware.img -m 1 -s 100e6 -t 20
+build\Release\streaming-client.exe -f fx3-firmware.img -m SINGLE-ADC -s 100e6 -t 20
 ```
 
 Stream (RX) from the DFC transceiver for 20 seconds in dual ADC mode (sample rate=100MHz):
 ```
-build\Release\streaming-client.exe -f fx3-firmware.img -m 2 -s 100e6 -t 20
+build\Release\streaming-client.exe -f fx3-firmware.img -m DUAL-ADC -s 100e6 -t 20
 ```

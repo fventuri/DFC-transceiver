@@ -77,7 +77,7 @@ int usb_init(usb_device_t *this, const char *firmware_file)
     return 0;
 }
 
-int usb_open(usb_device_t *this, int control_interface, int data_interface, int data_interface_altsetting, int endpoint)
+int usb_open(usb_device_t *this, int control_interface, int data_interface, int data_interface_altsetting, int endpoint, stream_direction_t stream_direction)
 {
     int status;
 
@@ -144,10 +144,48 @@ int usb_open(usb_device_t *this, int control_interface, int data_interface, int 
         libusb_free_config_descriptor(config);
         libusb_close(this->device_handle);
         return -1;
+    }
 
+    if (endpoint == -1) {
+        /* by default, choose the first endpoint whose address matches the direction */
+        for (int i = 0; i < interface_descriptor->bNumEndpoints; i++) {
+            const struct libusb_endpoint_descriptor *endpoint_descriptor = &interface_descriptor->endpoint[i];
+            if (stream_direction == STREAM_RX) {
+                if ((endpoint_descriptor->bEndpointAddress & 0x80) == 0x80) {
+                    endpoint = i;
+                    break;
+                }
+            } else if (stream_direction == STREAM_TX) {
+                if ((endpoint_descriptor->bEndpointAddress & 0x80) == 0x00) {
+                    endpoint = i;
+                    break;
+                }
+            }
+        }
+        if (endpoint == -1) {
+            fprintf(stderr, "usb_open - unable to find endpoint matching stream direction\n");
+            libusb_free_config_descriptor(config);
+            libusb_close(this->device_handle);
+            return -1;
+        }
+    }
+    const struct libusb_endpoint_descriptor *endpoint_descriptor = &interface_descriptor->endpoint[endpoint];
+    if (stream_direction == STREAM_RX) {
+        if ((endpoint_descriptor->bEndpointAddress & 0x80) != 0x80) {
+            fprintf(stderr, "usb_open - stream direction is STREAM_RX but chosen endpoint is not IN\n");
+            libusb_free_config_descriptor(config);
+            libusb_close(this->device_handle);
+            return -1;
+        }
+    } else if (stream_direction == STREAM_TX) {
+        if ((endpoint_descriptor->bEndpointAddress & 0x80) != 0x00) {
+            fprintf(stderr, "usb_open - stream direction is STREAM_TX but chosen endpoint is not OUT\n");
+            libusb_free_config_descriptor(config);
+            libusb_close(this->device_handle);
+            return -1;
+        }
     }
     this->endpoint = endpoint;
-    const struct libusb_endpoint_descriptor *endpoint_descriptor = &interface_descriptor->endpoint[endpoint];
     this->bEndpointAddress = endpoint_descriptor->bEndpointAddress;
     this->wMaxPacketSize = endpoint_descriptor->wMaxPacketSize;
 

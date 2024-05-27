@@ -65,3 +65,59 @@ int dfc_fx3_stop(dfc_t *this)
 
     return 0;
 }
+
+int dfc_fx3_shutdown_adc(dfc_t *this)
+{
+    const uint8_t SHUTDOWNADC = 0xc1;
+
+    int status;
+    status = usb_control_write(&this->usb_device, SHUTDOWNADC, 0, 0);
+    if (status != 0) {
+        fprintf(stderr, "dfc_fx3_shutdown_adc() failed\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int dfc_fx3_wakeup_adc(dfc_t *this)
+{
+    const uint8_t WAKEUPADC = 0xc2;
+
+    int status;
+    status = usb_control_write(&this->usb_device, WAKEUPADC, 0, 0);
+    if (status != 0) {
+        fprintf(stderr, "dfc_fx3_wakeup_adc() failed\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int dfc_fx3_shutdown_dac(dfc_t *this)
+{
+    const uint8_t SHUTDOWNDAC = 0xc3;
+
+    int status;
+    status = usb_control_write(&this->usb_device, SHUTDOWNDAC, 0, 0);
+    if (status != 0) {
+        fprintf(stderr, "dfc_fx3_shutdown_dac() failed\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int dfc_fx3_wakeup_dac(dfc_t *this)
+{
+    const uint8_t WAKEUPDAC = 0xc4;
+
+    int status;
+    status = usb_control_write(&this->usb_device, WAKEUPDAC, 0, 0);
+    if (status != 0) {
+        fprintf(stderr, "dfc_fx3_wakeup_dac() failed\n");
+        return -1;
+    }
+
+    return 0;
+}

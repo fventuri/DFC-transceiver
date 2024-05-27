@@ -1,0 +1,16 @@
+None vs Loop
+
+row 1 - states 1,9 - IDLE PING_DMA_WAIT - 0x0002 -> 0xC002                    | 0x0000C000
+row 2 - state 2, 8 - PING_LOOP PONG_DMA_WAIT - 0x04000004 -> 0x040000C4       | 0x000000C0
+row 3 - state 3 - PONG_INIT - 0x00000008 -> 0x04000008                        | 0x04000000
+row 6 - state 6 - PONG_LOOP - 0x0002 -> 0xC0002                               | 0x0000C000
+
+
+None vs Init
+
+row 0 - state 0 - START - 0x0000 -> 0x00C0                                    | 0x000000C0
+row 3 - state 3 - PONG_INIT - 0x0008 -> 0x00C8                                | 0x000000C0
+row 4 - state 4 - PING_INIT - RIGHT 0x000000000 -> 0x040000C0                 | RIGHT 0x040000C0
+row 5 - state 5 - PING_DMA_BUSY - 0x0000 -> 0x00C0                            | 0x000000C0
+row 6 - state 6 - PONG_LOOP - RIGHT 0x00000000 -> 0x000000C0                  | 0x000000C0
+row 7 - state 7 - PONG_DMA_BUSY - 0x04000000 -> 0x04000000                    | 0x000000C0

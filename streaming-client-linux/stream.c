@@ -19,6 +19,7 @@ static const unsigned int timeout = 5000;  /* timeout (in ms) for each transfer 
 static atomic_int active_transfers;
 static bool stop_transfers = false;
 /* stream stats */
+/* TODO: move them to their own structure inside a stream structure */
 static unsigned int success_count = 0;         // number of successful transfers
 static unsigned int failure_count = 0;         // number of failed transfers
 static unsigned long long transfer_size = 0;   // total size of data transfers
@@ -30,15 +31,18 @@ static short sample_odd_max = SHRT_MIN;        // maximum odd sample value
 static const int SIXTEEN_BITS_SIZE = 65536;
 static unsigned long long *histogram_even = NULL;   // histogram for even samples
 static unsigned long long *histogram_odd = NULL;    // histogram for odd samples
-static int write_fileno = -1;
+
+static uint8_t *read_buffer = NULL;
 
 
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer) ;
 
 
-int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_transfer, int num_concurrent_transfers, bool show_histogram, int write_fd)
+int stream_init(stream_t *this, stream_direction_t direction, int read_write_fileno, usb_device_t *usb_device, int num_packets_per_transfer, int num_concurrent_transfers, bool show_histogram)
 {
     this->usb_device = usb_device;
+    this->direction = direction;
+    this->read_write_fileno = read_write_fileno;
     this->num_packets_per_transfer = num_packets_per_transfer;
     this->num_concurrent_transfers = num_concurrent_transfers;
     this->transfer_size = num_packets_per_transfer * usb_device->packet_size;
@@ -54,6 +58,11 @@ int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_tr
             }
             return -1;
         }
+    }
+
+    /* allocate read buffer if direction is STREAM_TX */
+    if (direction == STREAM_TX) {
+        read_buffer = (uint8_t *)malloc(this->transfer_size / 2);
     }
 
     /* populate the required libusb_transfer fields */
@@ -81,8 +90,6 @@ int stream_init(stream_t *this, usb_device_t *usb_device, int num_packets_per_tr
         }
     }
 
-    write_fileno = write_fd;
-
     return 0;
 }
 
@@ -107,6 +114,10 @@ int stream_fini(stream_t *this)
     }
     if (histogram_odd != NULL) {
         free(histogram_odd);
+    }
+
+    if (read_buffer != NULL) {
+        free(read_buffer);
     }
 
     return 0;
@@ -162,61 +173,63 @@ int stream_stop(stream_t *this)
     return ok ? 0 : - 1;
 }
 
-void stream_stats(unsigned int duration)
+void stream_stats(stream_t *this, unsigned int duration)
 {
     fprintf(stderr, "success count: %u\n", success_count);
     fprintf(stderr, "failure count: %u\n", failure_count);
     fprintf(stderr, "transfer size: %llu B\n", transfer_size);
     fprintf(stderr, "transfer rate: %.0lf kB/s\n", (double) transfer_size / duration / 1024.0);
-    fprintf(stderr, "even samples range: [%hd,%hd]\n", sample_even_min, sample_even_max);
-    fprintf(stderr, "odd samples range: [%hd,%hd]\n", sample_odd_min, sample_odd_max);
+    if (this->direction == STREAM_RX) {
+        fprintf(stderr, "even samples range: [%hd,%hd]\n", sample_even_min, sample_even_max);
+        fprintf(stderr, "odd samples range: [%hd,%hd]\n", sample_odd_min, sample_odd_max);
 
-    if (histogram_even != NULL) {
-        int histogram_min = -1;
-        int histogram_max = -1;
-        unsigned long long total_histogram_samples = 0;
-        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
-            if (histogram_even[i] > 0) {
-                if (histogram_min < 0) {
-                    histogram_min = i;
+        if (histogram_even != NULL) {
+            int histogram_min = -1;
+            int histogram_max = -1;
+            unsigned long long total_histogram_samples = 0;
+            for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+                if (histogram_even[i] > 0) {
+                    if (histogram_min < 0) {
+                        histogram_min = i;
+                    }
+                    histogram_max = i;
+                    total_histogram_samples += histogram_even[i];
                 }
-                histogram_max = i;
-                total_histogram_samples += histogram_even[i];
             }
-        }
-        if (total_histogram_samples > 0) {
-            fprintf(stdout, "# Even samples histogram\n");
-            for (int i = histogram_min; i <= histogram_max; i++) {
-                fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
-                        histogram_even[i]);
+            if (total_histogram_samples > 0) {
+                fprintf(stdout, "# Even samples histogram\n");
+                for (int i = histogram_min; i <= histogram_max; i++) {
+                    fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
+                            histogram_even[i]);
+                }
+                fprintf(stdout, "\n");
             }
-            fprintf(stdout, "\n");
+            fprintf(stderr, "total even histogram samples: %llu\n", total_histogram_samples);
         }
-        fprintf(stderr, "total even histogram samples: %llu\n", total_histogram_samples);
-    }
 
-    if (histogram_odd != NULL) {
-        int histogram_min = -1;
-        int histogram_max = -1;
-        unsigned long long total_histogram_samples = 0;
-        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
-            if (histogram_odd[i] > 0) {
-                if (histogram_min < 0) {
-                    histogram_min = i;
+        if (histogram_odd != NULL) {
+            int histogram_min = -1;
+            int histogram_max = -1;
+            unsigned long long total_histogram_samples = 0;
+            for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+                if (histogram_odd[i] > 0) {
+                    if (histogram_min < 0) {
+                        histogram_min = i;
+                    }
+                    histogram_max = i;
+                    total_histogram_samples += histogram_odd[i];
                 }
-                histogram_max = i;
-                total_histogram_samples += histogram_odd[i];
             }
-        }
-        if (total_histogram_samples > 0) {
-            fprintf(stdout, "# Odd samples histogram\n");
-            for (int i = histogram_min; i <= histogram_max; i++) {
-                fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
-                        histogram_odd[i]);
+            if (total_histogram_samples > 0) {
+                fprintf(stdout, "# Odd samples histogram\n");
+                for (int i = histogram_min; i <= histogram_max; i++) {
+                    fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
+                            histogram_odd[i]);
+                }
+                fprintf(stdout, "\n");
             }
-            fprintf(stdout, "\n");
+            fprintf(stderr, "total odd histogram samples: %llu\n", total_histogram_samples);
         }
-        fprintf(stderr, "total odd histogram samples: %llu\n", total_histogram_samples);
     }
 
     return;
@@ -224,7 +237,8 @@ void stream_stats(unsigned int duration)
 
 
 /* internal functions */
-static void stream_callback(uint8_t *buffer, int length);
+static int stream_rx_callback(stream_t *this, uint8_t *buffer, int length);
+static int stream_tx_callback(stream_t *this, uint8_t *buffer, int length);
 
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer) 
 {
@@ -233,7 +247,19 @@ static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
     if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
         /* success!!! */
         success_count++;
-        stream_callback(transfer->buffer, transfer->actual_length);
+        stream_t *stream = (stream_t *)transfer->user_data;
+        switch (stream->direction) {
+        case STREAM_RX:
+            if (stream_rx_callback(stream, transfer->buffer, transfer->actual_length) == -1) {
+                stop_transfers = true;
+            }
+            break;
+        case STREAM_TX:
+            if (stream_tx_callback(stream, transfer->buffer, transfer->actual_length) == -1) {
+                stop_transfers = true;
+            }
+            break;
+        }
         if (!stop_transfers) {
             int status = libusb_submit_transfer(transfer);
             if (status != LIBUSB_SUCCESS) {
@@ -266,7 +292,7 @@ static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
     return;
 }
 
-static void stream_callback(uint8_t *buffer, int length)
+static int stream_rx_callback(stream_t *this, uint8_t *buffer, int length)
 {
     transfer_size += length;
     short *samples = (short *)buffer;
@@ -292,14 +318,14 @@ static void stream_callback(uint8_t *buffer, int length)
         }
     }
 
-    if (write_fileno >= 0) {
+    if (this->read_write_fileno >= 0) {
         size_t remaining = length;
         while (remaining > 0) {
-            ssize_t written = write(write_fileno, buffer + (length - remaining), remaining);
+            ssize_t written = write(this->read_write_fileno, buffer + (length - remaining), remaining);
             if (written == -1) {
                 fprintf(stderr, "write to output file failed - error: %s\n", strerror(errno));
                 /* if there's any error stop writing to output file */
-                write_fileno = -1;
+                this->read_write_fileno = -1;
                 break;
             } else {
                 remaining -= written;
@@ -307,5 +333,44 @@ static void stream_callback(uint8_t *buffer, int length)
         }
     }
 
-    return;
+    return 0;
+}
+
+static int stream_tx_callback(stream_t *this, uint8_t *buffer, int length)
+{
+    short *samples = (short *)buffer;
+    int nsamples __attribute__((unused)) = length / sizeof(samples[0]);
+
+    /* read nsamples/2 from input because of interleaving them with 0's - see below */
+    size_t remaining = length / 2;
+    while (remaining > 0) {
+        ssize_t nread = read(this->read_write_fileno, read_buffer + (length / 2 - remaining), remaining);
+        if (nread == -1) {
+            fprintf(stderr, "read from input file/stdin failed - error: %s\n", strerror(errno));
+            /* if there's any error stop reading from input file */
+            this->read_write_fileno = -1;
+            return -1;
+            break;
+        } else if (nread == 0) {
+            /* EOF - send a message and exit */
+            fprintf(stderr, "EOF from input file/stdin. Done streaming\n");
+            return -1;
+            break;
+        } else {
+            remaining -= nread;
+        }
+    }
+
+    /* interleave the 16 bit samples them with 0 samples because we are running at 32 bits */
+    /* shift the values by 2 bits because the DAC is comnnected to bits 2:15 */
+    short *insamples = (short *)read_buffer;
+    int ninsamples = (length / 2 - remaining) / sizeof(insamples[0]);
+    for (int i = 0, j = 0; i < ninsamples; i++, j += 2) {
+        samples[j] = 0;
+        samples[j+1] = insamples[i] << 2;
+    }
+
+    transfer_size += ninsamples * sizeof(insamples[0]);
+
+    return 0;
 }

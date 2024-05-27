@@ -6,6 +6,10 @@
 ##
 
 FX3FWROOT=/opt/FX3SDK/cyfx3sdk
+#CYCONFOPT=fx3_release
+
+## FX3 fw version is just the build timestamp for now
+USER_CFLAGS=-DFW_VERSION=\"$(shell date -u -Iseconds)\"
 
 #all:compile
 
@@ -18,6 +22,7 @@ all:$(MODULE).img
 SOURCE= app.c 	\
 	dfc_modes.c	\
 	gpif.c	\
+	gpio.c	\
 	i2c.c	\
 	si5351.c	\
 	uart.c	\
@@ -25,8 +30,12 @@ SOURCE= app.c 	\
 	usbdscr.c	\
 	cyfxtx.c	\
 	modes/adc_modes.c	\
+	modes/dac_modes.c	\
+	modes/dac.c	\
+	modes/dac_fx3_clock.c	\
 	modes/dual_adc.c	\
 	modes/single_adc.c	\
+	modes/single_adc_fx3_clock.c	\
 	modes/uart_only.c
 
 ifeq ($(CYFXBUILD),arm)
@@ -45,15 +54,18 @@ $(MODULE).$(EXEEXT): $(A_OBJECT) $(C_OBJECT)
 
 cyfxtx.c:
 	cp $(FX3FWROOT)/fw_build/fx3_fw/cyfxtx.c .
+	chmod 644 cyfxtx.c
 	@# set CY_U3P_SYS_MEM_TOP to 0x40080000 as per this KB article:
 	@# https://community.infineon.com/t5/Knowledge-Base-Articles/Modifying-the-Default-Memory-Map-in-FX3-CX3-FX3S-SD3-FX2G2-and-SD2-KBA229114/ta-p/249462
 	sed -i 's/^\(#define CY_U3P_SYS_MEM_TOP  *\)(0x40078000)/\1(0x40080000)/' cyfxtx.c
 
 cyfx_startup.S:
 	cp $(FX3FWROOT)/fw_build/fx3_fw/cyfx_startup.S .
+	chmod 644 cyfx_startup.S
 
 cyfx_gcc_startup.S:
 	cp $(FX3FWROOT)/fw_build/fx3_fw/cyfx_gcc_startup.S .
+	chmod 644 cyfx_gcc_startup.S
 
 $(C_OBJECT) : %.o : %.c
 	$(COMPILE)

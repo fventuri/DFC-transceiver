@@ -19,6 +19,7 @@
 
 #include "app.h"
 #include "dfc_modes.h"
+#include "gpio.h"
 #include "si5351.h"
 #include "usb.h"
 
@@ -36,11 +37,15 @@ volatile CyBool_t glStopFx3Rqt = CyFalse;
 volatile CyBool_t glStartAdcRqt = CyFalse;
 volatile double glStartAdcReference = 0.0;
 volatile double glStartAdcFrequency = 0.0;
+volatile uint8_t glShutdownAdcRqt = -1;
+volatile uint8_t glShutdownDacRqt = -1;
 
 /* internal functions */
 static void SetDFCMode(uint8_t dfcModeIndex);
 static void StartFx3();
 static void StopFx3();
+static void ShutdownAdc(CyBool_t shutdown);
+static void ShutdownDac(CyBool_t shutdown);
 
 /* Application Error Handler */
 void
@@ -134,8 +139,7 @@ CyFxApplnUSBSetupCB (
     CyBool_t isHandled = CyFalse;
     CyU3PReturnStatus_t status;
 
-    /* FX3 fw version is just the build timestamp for now */
-    uint8_t fwVersion[] = __TIMESTAMP__;
+    uint8_t fwVersion[] = FW_VERSION;
 
     /* Decode the fields from the setup request. */
     bReqType = (setupdat0 & CY_U3P_USB_REQUEST_TYPE_MASK);
@@ -180,11 +184,16 @@ CyFxApplnUSBSetupCB (
                     CyU3PDebugPrint (2, "Get data failed\r\n");
                 }
                 uint8_t dfcModeIndex = glEp0Buffer[0];
-                if (dfcModeIndex < NumDFCModes && dfcModeIndex != glCurrentDFCModeIndex) {
-                    glSetDFCModeRqt = dfcModeIndex;
+                if (dfcModeIndex >= NumDFCModes) {
+                    CyU3PDebugPrint (2, "Requested DFC mode is out of range [0:%d]\r\n", NumDFCModes - 1);
+                    isHandled = CyFalse;
+                } else {
+                    if (dfcModeIndex != glCurrentDFCModeIndex) {
+                        glSetDFCModeRqt = dfcModeIndex;
+                    }
+                    CyU3PUsbAckSetup ();
+                    isHandled = CyTrue;
                 }
-                CyU3PUsbAckSetup ();
-                isHandled = CyTrue;
                 break;
 
             case 0xAA: /* DFC - STARTFX3 */
@@ -209,6 +218,30 @@ CyFxApplnUSBSetupCB (
                 double *ep0_data = (double *)glEp0Buffer;
                 glStartAdcReference = ep0_data[0];
                 glStartAdcFrequency = ep0_data[1];
+                isHandled = CyTrue;
+                break;
+
+            case 0xC1: /* DFC - SHUTDOWNADC */
+                glShutdownAdcRqt = 1;
+                CyU3PUsbAckSetup ();
+                isHandled = CyTrue;
+                break;
+
+            case 0xC2: /* DFC - WAKEUPADC */
+                glShutdownAdcRqt = 0;
+                CyU3PUsbAckSetup ();
+                isHandled = CyTrue;
+                break;
+
+            case 0xC3: /* DFC - SHUTDOWNDAC */
+                glShutdownDacRqt = 1;
+                CyU3PUsbAckSetup ();
+                isHandled = CyTrue;
+                break;
+
+            case 0xC4: /* DFC - WAKEUPDAC */
+                glShutdownDacRqt = 0;
+                CyU3PUsbAckSetup ();
                 isHandled = CyTrue;
                 break;
 
@@ -402,6 +435,20 @@ CyFxAppThread_Entry (
             Si5351(glStartAdcReference, glStartAdcFrequency);
         }
 
+        if (glShutdownAdcRqt != (uint8_t)-1)
+        {
+            CyBool_t shutdown = glShutdownAdcRqt;
+            glShutdownAdcRqt = -1;
+            ShutdownAdc(shutdown);
+        }
+
+        if (glShutdownDacRqt != (uint8_t)-1)
+        {
+            CyBool_t shutdown = glShutdownDacRqt;
+            glShutdownDacRqt = -1;
+            ShutdownDac(shutdown);
+        }
+
         if (glCurrentDFCMode->LoopActions != NULL)
             glCurrentDFCMode->LoopActions();
 
@@ -524,6 +571,16 @@ static void StopFx3()
 {
     /* SDDC_FX3 GPIF II state machine checks !FW_TRG to stop */
     CyU3PGpifControlSWInput(CyFalse);
+}
+
+static void ShutdownAdc(CyBool_t shutdown)
+{
+    GpioShutdownAdc(shutdown);
+}
+
+static void ShutdownDac(CyBool_t shutdown)
+{
+    GpioShutdownDac(shutdown);
 }
 
 /* [ ] */

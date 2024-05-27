@@ -40,8 +40,12 @@
 /* producer endpoint (TX) */
 #define CY_FX_EP_PRODUCER               0x01    /* EP 1 OUT */
 #define CY_FX_EP_PRODUCER_SOCKET        CY_U3P_UIB_SOCKET_PROD_1    /* Socket 1 is producer */
-#define CY_FX_GPIF_CONSUMER_SOCKET_0    CY_U3P_PIB_SOCKET_2
-#define CY_FX_GPIF_CONSUMER_SOCKET_1    CY_U3P_PIB_SOCKET_3
+#define CY_FX_GPIF_CONSUMER_SOCKET_0    CY_U3P_PIB_SOCKET_0
+#define CY_FX_GPIF_CONSUMER_SOCKET_1    CY_U3P_PIB_SOCKET_1
+// fv - will use the values below for  RX/TX full-duplex
+// (with a new state machine)
+//#define CY_FX_GPIF_CONSUMER_SOCKET_0    CY_U3P_PIB_SOCKET_2
+//#define CY_FX_GPIF_CONSUMER_SOCKET_1    CY_U3P_PIB_SOCKET_3
 
 /* Burst mode definitions: Only for super speed operation. The maximum burst mode 
  * supported is limited by the USB hosts available. The maximum value for this is 16

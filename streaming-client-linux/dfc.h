@@ -19,5 +19,9 @@ const uint8_t* dfc_fx3_get_fw_version(dfc_t *this);
 uint8_t dfc_fx3_get_mode(dfc_t *this);
 int dfc_fx3_start(dfc_t *this);
 int dfc_fx3_stop(dfc_t *this);
+int dfc_fx3_shutdown_adc(dfc_t *this);
+int dfc_fx3_wakeup_adc(dfc_t *this);
+int dfc_fx3_shutdown_dac(dfc_t *this);
+int dfc_fx3_wakeup_dac(dfc_t *this);
 
 #endif /* _STREAMING_CLIENT_DFC_H_ */

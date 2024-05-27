@@ -11,6 +11,19 @@
 #include <windows.h>
 
 
+// useful types
+typedef enum { STREAM_RX, STREAM_TX } streamDirection_t;
+
+typedef enum {
+    UART_ONLY,
+    SINGLE_ADC,
+    DUAL_ADC,
+    DAC,
+    SINGLE_ADC_FX3_CLOCK,
+    DAC_FX3_CLOCK,
+    DFC_MODE_UNKNOWN = -1
+} dfcMode_t;
+
 // useful constants
 static const USHORT fx3_streamer_example[] = { 0x04b4, 0x00f1 };
 static const USHORT fx3_dfu_mode[]         = { 0x04b4, 0x00f3 };
@@ -20,12 +33,19 @@ static const UCHAR SETMODE       = 0x90;
 static const UCHAR STARTADC      = 0xb2;
 static const UCHAR STARTFX3      = 0xaa;
 static const UCHAR STOPFX3       = 0xab;
+static const UCHAR SHUTDOWNADC   = 0xc1;
+static const UCHAR WAKEUPADC     = 0xc2;
+static const UCHAR SHUTDOWNDAC   = 0xc3;
+static const UCHAR WAKEUPDAC     = 0xc4;
 static const ULONG TRANSFER_TIMEOUT = 100;  // transfer timeout in ms
 
 // internal functions
 static bool open_usb_device_with_vid_pid(CCyUSBDevice *usbDevice, USHORT vid, USHORT pid);
-static void streamCallback(UINT8 *buffer, long length);
-static void streamStats(unsigned int duration);
+static bool usb_control_read(CCyUSBDevice *usbDevice, UCHAR request, const char *requestName, UCHAR *data, LONG dataSize);
+static bool usb_control_write(CCyUSBDevice *usbDevice, UCHAR request, const char *requestName, UCHAR *data, LONG dataSize);
+static int streamRxCallback(UINT8 *buffer, long length);
+static int streamTxCallback(UINT8 *buffer, long length);
+static void streamStats(streamDirection_t streamDirection, unsigned int duration);
 static VOID CALLBACK doStopTransfers(PVOID lpParam, BOOLEAN TimerOrWaitFired);
 
 // global variables
@@ -40,7 +60,10 @@ static SHORT sampleOddMax = SHRT_MIN;   // maximum odd sample value
 static const int SIXTEEN_BITS_SIZE = 65536;
 static unsigned long long *histogramEven = NULL;   // histogram for even samples
 static unsigned long long *histogramOdd = NULL;    // histogram for odd samples
-static std::ofstream write_ostream;
+static std::ofstream writeOstream;
+
+static std::ifstream readIstream;
+static uint8_t *readBuffer = NULL;
 
 volatile bool stopTransfers = false;
 
@@ -48,14 +71,14 @@ volatile bool stopTransfers = false;
 int main(int argc, char *argv[])
 {
     char *firmware_file = NULL;
-    int dfc_mode = 1;
+    dfcMode_t dfc_mode = DFC_MODE_UNKNOWN;
     double samplerate = 32e6;
     double reference_clock = 27e6;
     double reference_ppm = 0;
     int control_interface = 0;
     int data_interface = 0;
     int data_interface_altsetting = 0;
-    int endpoint = 0;
+    int endpoint = -1;
     bool cypress_example = false;
     unsigned int reqsize = 16;
     unsigned int queuedepth = 16;
@@ -63,15 +86,29 @@ int main(int argc, char *argv[])
     bool show_histogram = false;
 
     int opt;
-    while ((opt = getopt(argc, argv, "f:m:s:x:c:i:e:r:q:t:o:CH")) != -1) {
+    while ((opt = getopt(argc, argv, "f:m:s:x:c:j:e:r:q:t:o:i:CH")) != -1) {
         switch (opt) {
         case 'f':
             firmware_file = optarg;
             break;
         case 'm':
-            if (sscanf(optarg, "%d", &dfc_mode) != 1) {
-                fprintf(stderr, "invalid DFC mode: %s\n", optarg);
-                return EXIT_FAILURE;
+            if (sscanf(optarg, "%d", (int *)&dfc_mode) != 1) {
+                if (strcmp(optarg, "UART-ONLY") == 0) {
+                    dfc_mode = UART_ONLY;
+                } else if (strcmp(optarg, "SINGLE-ADC") == 0) {
+                    dfc_mode = SINGLE_ADC;
+                } else if (strcmp(optarg, "DUAL-ADC") == 0) {
+                    dfc_mode = DUAL_ADC;
+                } else if (strcmp(optarg, "DAC") == 0) {
+                    dfc_mode = DAC;
+                } else if (strcmp(optarg, "SINGLE-ADC-FX3-CLOCK") == 0) {
+                    dfc_mode = SINGLE_ADC_FX3_CLOCK;
+                } else if (strcmp(optarg, "DAC-FX3-CLOCK") == 0) {
+                    dfc_mode = DAC_FX3_CLOCK;
+                } else {
+                    fprintf(stderr, "invalid DFC mode: %s\n", optarg);
+                    return EXIT_FAILURE;
+                }
             }
             break;
         case 's':
@@ -92,7 +129,7 @@ int main(int argc, char *argv[])
                 return EXIT_FAILURE;
             }
             break;
-        case 'i':
+        case 'j':
             if (sscanf(optarg, "%d@%d", &data_interface, &data_interface_altsetting) != 2) {
                 if (sscanf(optarg, "%d", &data_interface) != 1) {
                     fprintf(stderr, "invalid data interface number: %s\n", optarg);
@@ -125,9 +162,16 @@ int main(int argc, char *argv[])
             }
             break;
         case 'o':
-            write_ostream.open(optarg, std::ios_base::out | std::ios_base::binary);
-            if (!write_ostream) {
+            writeOstream.open(optarg, std::ios_base::out | std::ios_base::binary);
+            if (!writeOstream) {
                 fprintf(stderr, "open(%s) for writing failed\n", optarg);
+                return EXIT_FAILURE;
+            }
+            break;
+        case 'i':
+            readIstream.open(optarg, std::ios_base::in | std::ios_base::binary);
+            if (!readIstream) {
+                fprintf(stderr, "open(%s) for reading failed\n", optarg);
                 return EXIT_FAILURE;
             }
             break;
@@ -143,9 +187,47 @@ int main(int argc, char *argv[])
         }
     }
 
+    if (readIstream.is_open() && (writeOstream.is_open() || show_histogram)) {
+        fprintf(stderr, "[ERROR] options -i (read from file) and -o (write to file) or -H (show histogram) are exclusive\n");
+        fprintf(stderr, "[ERROR] streaming-client cannot not write and read at the same time (no full-duplex yet)\n");
+        readIstream.close();
+        writeOstream.close();
+        return EXIT_FAILURE;
+    }
+
+    if (writeOstream.is_open() && show_histogram) {
+        fprintf(stderr, "[ERROR] options -H (show histogram) and -o - (write to stdout) are mutually exclusive\n");
+        writeOstream.close();
+        return EXIT_FAILURE;
+    }
+
     if (firmware_file == NULL) {
         fprintf(stderr, "missing firmware file\n");
         return EXIT_FAILURE;
+    }
+
+    streamDirection_t streamDirection = readIstream.is_open() ? STREAM_TX : STREAM_RX;
+    if (dfc_mode == DFC_MODE_UNKNOWN) {
+        switch (streamDirection) {
+        case STREAM_RX:
+            dfc_mode = SINGLE_ADC;
+            break;
+        case STREAM_TX:
+            dfc_mode = DAC;
+            break;
+        }
+    }
+
+    if (streamDirection == STREAM_RX) {
+        if (!(dfc_mode == SINGLE_ADC || dfc_mode == DUAL_ADC || dfc_mode == SINGLE_ADC_FX3_CLOCK)) {
+            fprintf(stderr, "invalid DFC mode for RX stream direction\n");
+            return EXIT_FAILURE;
+        }
+    } else if (streamDirection == STREAM_TX) {
+        if (!(dfc_mode == DAC || dfc_mode == DAC_FX3_CLOCK)) {
+            fprintf(stderr, "invalid DFC mode for TX stream direction\n");
+            return EXIT_FAILURE;
+        }
     }
 
     // look for streamer device first; if found, use that
@@ -186,29 +268,15 @@ int main(int argc, char *argv[])
 
     if (!cypress_example) {
         // get FW version
-        usbDevice->ControlEndPt->Target  = TGT_DEVICE;
-        usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
-        usbDevice->ControlEndPt->ReqCode = GETFWVERSION;
-        usbDevice->ControlEndPt->Value   = 0;
-        usbDevice->ControlEndPt->Index   = 0;
         UCHAR fwVersion[64];
-        LONG fwVersionSize = sizeof(fwVersion);
-        if (!usbDevice->ControlEndPt->Read(fwVersion, fwVersionSize)) {
-            fprintf(stderr, "FX3 control GETFWVERSION command failed\n");
+        if (!usb_control_read(usbDevice, GETFWVERSION, "GETFWVERSION", fwVersion, sizeof(fwVersion))) {
             return 1;
         }
         fprintf(stderr, "DFC FW version: %s\n", fwVersion);
 
         // set DFC mode
-        usbDevice->ControlEndPt->Target  = TGT_DEVICE;
-        usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
-        usbDevice->ControlEndPt->ReqCode = SETMODE;
-        usbDevice->ControlEndPt->Value   = 0;
-        usbDevice->ControlEndPt->Index   = 0;
-        UCHAR dataByte = dfc_mode;
-        LONG dataByteSize = sizeof(dataByte);
-        if (!usbDevice->ControlEndPt->Write(&dataByte, dataByteSize)) {
-            fprintf(stderr, "FX3 control SETMODE command failed\n");
+        UCHAR dfcMode = dfc_mode;
+        if (!usb_control_write(usbDevice, SETMODE, "SETMODE", &dfcMode, sizeof(dfcMode))) {
             return 1;
         }
 
@@ -216,41 +284,57 @@ int main(int argc, char *argv[])
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
         // get DFC mode
-        usbDevice->ControlEndPt->Target  = TGT_DEVICE;
-        usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
-        usbDevice->ControlEndPt->ReqCode = GETMODE;
-        usbDevice->ControlEndPt->Value   = 0;
-        usbDevice->ControlEndPt->Index   = 0;
-        UCHAR dfcMode;
-        LONG dfcModeSize = sizeof(dfcMode);
-        if (!usbDevice->ControlEndPt->Read(&dfcMode, dfcModeSize)) {
-            fprintf(stderr, "FX3 control GETMODE command failed\n");
+        uint8_t currentDfcMode = -2;
+        if (!usb_control_read(usbDevice, GETMODE, "GETMODE", &currentDfcMode, sizeof(currentDfcMode))) {
             return 1;
         }
         fprintf(stderr, "DFC mode: %hhu\n", dfcMode);
 
-        // start ADC clock
-        usbDevice->ControlEndPt->Target  = TGT_DEVICE;
-        usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
-        usbDevice->ControlEndPt->ReqCode = STARTADC;
-        usbDevice->ControlEndPt->Value   = 0;
-        usbDevice->ControlEndPt->Index   = 0;
-        double data[] = { reference_clock * (1.0 + 1e-6 * reference_ppm), samplerate };
-        LONG dataSize = sizeof(data);
-        if (!usbDevice->ControlEndPt->Write((UCHAR *)data, dataSize)) {
-            fprintf(stderr, "FX3 control STARTADC command failed\n");
+        if (currentDfcMode != dfcMode) {
+            fprintf(stderr, "[ERROR] Current DFC mode: %hhu - expected: %d\n", currentDfcMode, dfcMode);
             return 1;
         }
 
+        if (dfcMode == SINGLE_ADC || dfcMode == DUAL_ADC) {
+            // wakeup ADC0
+            if (!usb_control_write(usbDevice, WAKEUPADC, "WAKEUPADC", NULL, 0)) {
+                return 1;
+            }
+
+            // shutdown DAC
+            if (!usb_control_write(usbDevice, SHUTDOWNDAC, "SHUTDOWNDAC", NULL, 0)) {
+                return 1;
+            }
+        } else if (dfcMode == DAC || dfcMode == DAC_FX3_CLOCK) {
+            // shutdown ADC0
+            if (!usb_control_write(usbDevice, SHUTDOWNADC, "SHUTDOWNADC", NULL, 0)) {
+                return 1;
+            }
+
+            // wakeup DAC
+            if (!usb_control_write(usbDevice, WAKEUPDAC, "WAKEUPDAC", NULL, 0)) {
+                return 1;
+            }
+#define _FX3_CLOCK_TEST_
+#ifdef _FX3_CLOCK_TEST_
+        } else if (dfcMode == SINGLE_ADC_FX3_CLOCK) {
+            fprintf(stderr, "shutting down ADC\n");
+            if (!usb_control_write(usbDevice, SHUTDOWNADC, "SHUTDOWNADC", NULL, 0)) {
+                return 1;
+            }
+#endif  /* _FX3_CLOCK_TEST_ */
+        }
+
+        if (!(dfcMode == SINGLE_ADC_FX3_CLOCK || dfcMode == DAC_FX3_CLOCK)) {
+            // start ADC clock
+            double data[] = { reference_clock * (1.0 + 1e-6 * reference_ppm), samplerate };
+            if (!usb_control_write(usbDevice, STARTADC, "STARTADC", (UCHAR *)data, sizeof(data))) {
+                return 1;
+            }
+        }
+
         // start FX3
-        usbDevice->ControlEndPt->Target  = TGT_DEVICE;
-        usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
-        usbDevice->ControlEndPt->ReqCode = STARTFX3;
-        usbDevice->ControlEndPt->Value   = 0;
-        usbDevice->ControlEndPt->Index   = 0;
-        dataSize = 0;
-        if (!usbDevice->ControlEndPt->Write(NULL, dataSize)) {
-            fprintf(stderr, "FX3 control STARTFX3 command failed\n");
+        if (!usb_control_write(usbDevice, STARTFX3, "STARTFX3", NULL, 0)) {
             return 1;
         }
     }
@@ -263,11 +347,24 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        CCyBulkEndPoint *endPt = usbDevice->BulkInEndPt;
+        CCyBulkEndPoint *endPt = NULL;
+        switch (streamDirection) {
+        case STREAM_RX:
+            endPt = usbDevice->BulkInEndPt;
+            break;
+        case STREAM_TX:
+            endPt = usbDevice->BulkOutEndPt;
+            break;
+        }
         long pktSize = endPt->MaxPktSize;
         long transferSize = reqsize * pktSize;
         endPt->SetXferSize(transferSize);
         fprintf(stderr, "buffer transfer size = %ld - packet size = %ld\n", transferSize, pktSize);
+
+        /* allocate read buffer if direction is STREAM_TX */
+        if (streamDirection == STREAM_TX) {
+            readBuffer = (uint8_t *)malloc(transferSize / 2);
+        }
 
         typedef struct {
             UINT8 *buffer;
@@ -325,7 +422,18 @@ int main(int argc, char *argv[])
                 }
 
                 successCount++;
-                streamCallback(transfer->buffer, transferSize);
+                switch (streamDirection) {
+                case STREAM_RX:
+                    if (streamRxCallback(transfer->buffer, transferSize) == -1) {
+                        doStopTransfers = true;
+                    }
+                    break;
+                case STREAM_TX:
+                    if (streamTxCallback(transfer->buffer, transferSize) == -1) {
+                        doStopTransfers = true;
+                    }
+                    break;
+                }
 
                 if (!doStopTransfers) {
                     // requeue the transfer
@@ -345,7 +453,7 @@ int main(int argc, char *argv[])
             }
         }
 
-        streamStats(duration);
+        streamStats(streamDirection, duration);
 
         // clean up transfers
         for (int i = 0; i < queuedepth; i++) {
@@ -362,6 +470,10 @@ int main(int argc, char *argv[])
             free(histogramOdd);
         }
 
+        if (readBuffer != NULL) {
+            free(readBuffer);
+        }
+
         if (!DeleteTimerQueue(timerQueue)) {
             fprintf(stderr, "DeleteTimerQueue failed - error=%d\n", GetLastError());
         }
@@ -369,19 +481,13 @@ int main(int argc, char *argv[])
 
     if (!cypress_example) {
         // stop FX3
-        usbDevice->ControlEndPt->Target  = TGT_DEVICE;
-        usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
-        usbDevice->ControlEndPt->ReqCode = STOPFX3;
-        usbDevice->ControlEndPt->Value   = 0;
-        usbDevice->ControlEndPt->Index   = 0;
-        LONG dataSize = 0;
-        if (!usbDevice->ControlEndPt->Write(NULL, dataSize)) {
-            fprintf(stderr, "FX3 control STOPFX3 command failed\n");
+        if (!usb_control_write(usbDevice, STOPFX3, "STOPFX3", NULL, 0)) {
             return 1;
         }
     }
 
-    write_ostream.close();
+    writeOstream.close();
+    readIstream.close();
 
     return 0;
 }
@@ -401,7 +507,35 @@ static bool open_usb_device_with_vid_pid(CCyUSBDevice *usbDevice, USHORT vid, US
     return false;
 }
 
-static void streamCallback(UINT8 *buffer, long length)
+static bool usb_control_read(CCyUSBDevice *usbDevice, UCHAR request, const char *requestName, UCHAR *data, LONG dataSize)
+{
+    usbDevice->ControlEndPt->Target  = TGT_DEVICE;
+    usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
+    usbDevice->ControlEndPt->ReqCode = request;
+    usbDevice->ControlEndPt->Value   = 0;
+    usbDevice->ControlEndPt->Index   = 0;
+    if (!usbDevice->ControlEndPt->Read(data, dataSize)) {
+        fprintf(stderr, "FX3 control request %s (0x%02hhx) failed\n", requestName, request);
+        return false;
+    }
+    return true;
+}
+
+static bool usb_control_write(CCyUSBDevice *usbDevice, UCHAR request, const char *requestName, UCHAR *data, LONG dataSize)
+{
+    usbDevice->ControlEndPt->Target  = TGT_DEVICE;
+    usbDevice->ControlEndPt->ReqType = REQ_VENDOR;
+    usbDevice->ControlEndPt->ReqCode = request;
+    usbDevice->ControlEndPt->Value   = 0;
+    usbDevice->ControlEndPt->Index   = 0;
+    if (!usbDevice->ControlEndPt->Write(data, dataSize)) {
+        fprintf(stderr, "FX3 control request %s (0x%02hhx) failed\n", requestName, request);
+        return false;
+    }
+    return true;
+}
+
+static int streamRxCallback(UINT8 *buffer, long length)
 {
     totalTransferSize += length;
     SHORT *samples = (SHORT *)buffer;
@@ -427,74 +561,115 @@ static void streamCallback(UINT8 *buffer, long length)
         }
     }
 
-    if (write_ostream.is_open()) {
-        //write_ostream.write((const UINT8 *)buffer, length);
-        write_ostream.write((char *) buffer, length);
-        if (!write_ostream) {
+    if (writeOstream.is_open()) {
+        //writeOstream.write((const UINT8 *)buffer, length);
+        writeOstream.write((char *) buffer, length);
+        if (!writeOstream) {
             fprintf(stderr, "write to output file failed\n");
             /* if there's any error stop writing to the output file */
-            write_ostream.close();
+            writeOstream.close();
+            return -1;
         }
     }
 
-    return;
+    return 0;
 }
 
-static void streamStats(unsigned int duration)
+static int streamTxCallback(UINT8 *buffer, long length)
+{
+    totalTransferSize += length;
+    SHORT *samples = (SHORT *)buffer;
+
+    if (!readIstream.is_open()) {
+        return -1;
+    }
+    /* read nsamples/2 from input because of interleaving them with 0's - see below */
+    //readIstream.read((const UINT8 *)readBuffer, length / 2);
+    readIstream.read((char *) readBuffer, length / 2);
+    if (!readIstream) {
+        if (readIstream.eof()) {
+            /* EOF - send a message and exit */
+            fprintf(stderr, "EOF from input file. Done streaming\n");
+            readIstream.close();
+            return -1;
+        }
+        fprintf(stderr, "read from inpout file failed\n");
+        /* if there's any error stop reading from the input file */
+        readIstream.close();
+        return -1;
+    }
+
+    /* interleave the 16 bit samples them with 0 samples because we are running at 32 bits */
+    /* shift the values by 2 bits because the DAC is comnnected to bits 2:15 */
+    short *insamples = (short *)readBuffer;
+    int ninsamples = readIstream.gcount() / sizeof(insamples[0]);
+    for (int i = 0, j = 0; i < ninsamples; i++, j += 2) {
+        samples[j] = 0;
+        samples[j+1] = insamples[i] << 2;
+    }
+
+    totalTransferSize += ninsamples * sizeof(insamples[0]);
+
+    return 0;
+}
+
+static void streamStats(streamDirection_t streamDirection, unsigned int duration)
 {
     fprintf(stderr, "success count: %u\n", successCount);
     fprintf(stderr, "failure count: %u\n", failureCount);
     fprintf(stderr, "transfer size: %llu B\n", totalTransferSize);
     fprintf(stderr, "transfer rate: %.0lf kB/s\n", (double) totalTransferSize / duration / 1024.0);
-    fprintf(stderr, "even samples range: [%hd,%hd]\n", sampleEvenMin, sampleEvenMax);
-    fprintf(stderr, "odd samples range: [%hd,%hd]\n", sampleOddMin, sampleOddMax);
+    if (streamDirection == STREAM_RX) {
+        fprintf(stderr, "even samples range: [%hd,%hd]\n", sampleEvenMin, sampleEvenMax);
+        fprintf(stderr, "odd samples range: [%hd,%hd]\n", sampleOddMin, sampleOddMax);
 
-    if (histogramEven != NULL) {
-        int histogramMin = -1;
-        int histogramMax = -1;
-        unsigned long long totalHistogramSamples = 0;
-        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
-            if (histogramEven[i] > 0) {
-                if (histogramMin < 0) {
-                    histogramMin = i;
+        if (histogramEven != NULL) {
+            int histogramMin = -1;
+            int histogramMax = -1;
+            unsigned long long totalHistogramSamples = 0;
+            for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+                if (histogramEven[i] > 0) {
+                    if (histogramMin < 0) {
+                        histogramMin = i;
+                    }
+                    histogramMax = i;
+                    totalHistogramSamples += histogramEven[i];
                 }
-                histogramMax = i;
-                totalHistogramSamples += histogramEven[i];
             }
-        }
-        if (totalHistogramSamples > 0) {
-            fprintf(stdout, "# Even samples histogram\n");
-            for (int i = histogramMin; i <= histogramMax; i++) {
-                fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
-                        histogramEven[i]);
+            if (totalHistogramSamples > 0) {
+                fprintf(stdout, "# Even samples histogram\n");
+                for (int i = histogramMin; i <= histogramMax; i++) {
+                    fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
+                            histogramEven[i]);
+                }
+                fprintf(stdout, "\n");
             }
-            fprintf(stdout, "\n");
+            fprintf(stderr, "total even histogram samples: %llu\n", totalHistogramSamples);
         }
-        fprintf(stderr, "total even histogram samples: %llu\n", totalHistogramSamples);
-    }
 
-    if (histogramOdd != NULL) {
-        int histogramMin = -1;
-        int histogramMax = -1;
-        unsigned long long totalHistogramSamples = 0;
-        for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
-            if (histogramOdd[i] > 0) {
-                if (histogramMin < 0) {
-                    histogramMin = i;
+        if (histogramOdd != NULL) {
+            int histogramMin = -1;
+            int histogramMax = -1;
+            unsigned long long totalHistogramSamples = 0;
+            for (int i = 0; i < SIXTEEN_BITS_SIZE; i++) {
+                if (histogramOdd[i] > 0) {
+                    if (histogramMin < 0) {
+                        histogramMin = i;
+                    }
+                    histogramMax = i;
+                    totalHistogramSamples += histogramOdd[i];
                 }
-                histogramMax = i;
-                totalHistogramSamples += histogramOdd[i];
             }
-        }
-        if (totalHistogramSamples > 0) {
-            fprintf(stdout, "# Odd samples histogram\n");
-            for (int i = histogramMin; i <= histogramMax; i++) {
-                fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
-                        histogramOdd[i]);
+            if (totalHistogramSamples > 0) {
+                fprintf(stdout, "# Odd samples histogram\n");
+                for (int i = histogramMin; i <= histogramMax; i++) {
+                    fprintf(stdout, "%d\t%llu\n", i - SIXTEEN_BITS_SIZE / 2,
+                            histogramOdd[i]);
+                }
+                fprintf(stdout, "\n");
             }
-            fprintf(stdout, "\n");
+            fprintf(stderr, "total odd histogram samples: %llu\n", totalHistogramSamples);
         }
-        fprintf(stderr, "total odd histogram samples: %llu\n", totalHistogramSamples);
     }
 
     return;

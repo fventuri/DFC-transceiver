@@ -1,6 +1,6 @@
 /*
  * Project Name: single-adc.cyfx
- * Time : 05/12/2024 15:42:09
+ * Time : 05/25/2024 09:13:41
  * Device Type: FX3
  * Project Type: GPIF2
  *
@@ -13,8 +13,8 @@
  * 
  */
 
-#ifndef _INCLUDED__
-#define _INCLUDED__
+#ifndef _INCLUDED_CYFXGPIF2CONFIG_SINGLE_ADC_H_
+#define _INCLUDED_CYFXGPIF2CONFIG_SINGLE_ADC_H_
 #include "cyu3types.h"
 #include "cyu3gpif.h"
 
@@ -27,14 +27,14 @@
    Mapping of user defined state names to state indices
  */
 #define START 0
-#define TH0_RD 2
-#define TH0_RD_LD 4
-#define TH1_RD_LD 3
-#define TH1_RD 6
-#define TH1_BUSY 7
-#define TH1_WAIT 8
-#define TH0_BUSY 5
-#define TH0_WAIT 9
+#define PING_LOOP 2
+#define PING_INIT 4
+#define PONG_INIT 3
+#define PONG_LOOP 6
+#define PONG_DMA_BUSY 7
+#define PONG_DMA_WAIT 8
+#define PING_DMA_BUSY 5
+#define PING_DMA_WAIT 9
 #define IDLE 1
 
 
@@ -170,4 +170,4 @@ static const CyU3PGpifConfig_t CyFxGpifConfig  = {
     CyFxGpifRegValue
 };
 
-#endif   /* _INCLUDED__ */
+#endif   /* _INCLUDED_CYFXGPIF2CONFIG_SINGLE_ADC_H_ */

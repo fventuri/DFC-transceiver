@@ -11,9 +11,11 @@
 #include "cyu3gpif.h"
 #include "cyu3utils.h"
 
+#include "adc_modes.h"
 #include "app.h"
 #include "dfc_modes.h"
 #include "gpif.h"
+#include "gpio.h"
 #include "i2c.h"
 #include "uart.h"
 
@@ -57,6 +59,7 @@ void AdcModesInit(CyBool_t is32Wide) {
     /* initialize low-speed peripherals */
     UartInit();
     I2cInit();
+    GpioInit();
 
     /* initialize high-speed peripherals */
     GpifInit();
@@ -84,7 +87,7 @@ void AdcModesStart(CyU3PUSBSpeed_t usbSpeed, uint16_t size, CyBool_t is32Wide, c
     apiRetStatus = CyU3PSetEpConfig (CY_FX_EP_CONSUMER, &epCfg);
     if (apiRetStatus != CY_U3P_SUCCESS)
     {
-        CyU3PDebugPrint (4, "CyU3PSetEpConfig failed, Error code = %d\n", apiRetStatus);
+        CyU3PDebugPrint (4, "CyU3PSetEpConfig failed, Error code = %d\r\n", apiRetStatus);
         CyFxAppErrorHandler (apiRetStatus);
     }
 
@@ -122,7 +125,7 @@ void AdcModesStart(CyU3PUSBSpeed_t usbSpeed, uint16_t size, CyBool_t is32Wide, c
     apiRetStatus = CyU3PDmaMultiChannelCreate (&glDmaChHandle, CY_U3P_DMA_TYPE_AUTO_MANY_TO_ONE, &dmaMultiCfg);
     if (apiRetStatus != CY_U3P_SUCCESS)
     {
-        CyU3PDebugPrint (4, "CyU3PDmaMultiChannelCreate failed, Error code = %d\n", apiRetStatus);
+        CyU3PDebugPrint (4, "CyU3PDmaMultiChannelCreate failed, Error code = %d\r\n", apiRetStatus);
         CyFxAppErrorHandler(apiRetStatus);
     }
 
@@ -130,7 +133,7 @@ void AdcModesStart(CyU3PUSBSpeed_t usbSpeed, uint16_t size, CyBool_t is32Wide, c
     apiRetStatus = CyU3PDmaMultiChannelSetXfer (&glDmaChHandle, CY_FX_GPIFTOUSB_DMA_TX_SIZE, 0);
     if (apiRetStatus != CY_U3P_SUCCESS)
     {
-        CyU3PDebugPrint (4, "CyU3PDmaMultiChannelSetXfer failed, Error code = %d\n", apiRetStatus);
+        CyU3PDebugPrint (4, "CyU3PDmaMultiChannelSetXfer failed, Error code = %d\r\n", apiRetStatus);
         CyFxAppErrorHandler(apiRetStatus);
     }
 
@@ -138,14 +141,14 @@ void AdcModesStart(CyU3PUSBSpeed_t usbSpeed, uint16_t size, CyBool_t is32Wide, c
     apiRetStatus = CyU3PGpifLoad (cyFxGpifConfig);
     if (apiRetStatus != CY_U3P_SUCCESS)
     {
-        CyU3PDebugPrint (4, "CyU3PGpifLoad failed, error code = %d\n", apiRetStatus);
+        CyU3PDebugPrint (4, "CyU3PGpifLoad failed, error code = %d\r\n", apiRetStatus);
         CyFxAppErrorHandler (apiRetStatus);
     }
 
     apiRetStatus = CyU3PGpifSMStart (stateIndex, initialAlpha);
     if (apiRetStatus != CY_U3P_SUCCESS)
     {
-        CyU3PDebugPrint (4, "CyU3PGpifSMStart failed, error code = %d\n", apiRetStatus);
+        CyU3PDebugPrint (4, "CyU3PGpifSMStart failed, error code = %d\r\n", apiRetStatus);
         CyFxAppErrorHandler (apiRetStatus);
     }
 }
@@ -177,7 +180,7 @@ void AdcModesStop()
     apiRetStatus = CyU3PSetEpConfig(CY_FX_EP_CONSUMER, &epCfg);
     if (apiRetStatus != CY_U3P_SUCCESS)
     {
-        CyU3PDebugPrint (4, "CyU3PSetEpConfig failed, Error code = %d\n", apiRetStatus);
+        CyU3PDebugPrint (4, "CyU3PSetEpConfig failed, Error code = %d\r\n", apiRetStatus);
         CyFxAppErrorHandler (apiRetStatus);
     }
 }

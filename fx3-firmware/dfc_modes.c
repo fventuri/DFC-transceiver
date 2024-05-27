@@ -10,11 +10,17 @@
 extern DFCMode UART_ONLY;
 extern DFCMode SINGLE_ADC;
 extern DFCMode DUAL_ADC;
+extern DFCMode DAC;
+extern DFCMode SINGLE_ADC_FX3_CLOCK;
+extern DFCMode DAC_FX3_CLOCK;
 
 DFCMode *DFCModes[] = {
    &UART_ONLY,
    &SINGLE_ADC,
    &DUAL_ADC,
+   &DAC,
+   &SINGLE_ADC_FX3_CLOCK,
+   &DAC_FX3_CLOCK,
 };
 
 int NumDFCModes = sizeof(DFCModes) / sizeof(DFCModes[0]);
