@@ -1,0 +1,8 @@
+0	START                   	IDLE      	[0, 1]	[]	[]	          			
+1	IDLE, PING_DMA_WAIT     	PING_INIT 	[]	[0, 1]	[17]	          			
+2	PING_LOOP, PONG_DMA_WAIT	PONG_INIT 	[0, 1]	[]	[4, 17]	          			
+3	PONG_INIT               	PONG_LOOP 	[0, 1]	[]	[4, 16]	PONG_DMA_BUSY	[]	[]	[18]
+4	PING_INIT               	PING_DMA_BUSY	[]	[]	[18]	PING_LOOP 	[0, 1]	[]	[16]
+5	PING_DMA_BUSY           	PING_DMA_WAIT	[0, 1]	[]	[]	          			
+6	PONG_LOOP               	PING_INIT 	[]	[0, 1]	[17]	IDLE      	[0, 1]	[]	[]
+7	PONG_DMA_BUSY           	PONG_DMA_WAIT	[0, 1]	[]	[4]	          			

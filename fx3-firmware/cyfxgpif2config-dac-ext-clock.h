@@ -1,6 +1,6 @@
 /*
- * Project Name: dac-fx3-clock.cyfx
- * Time : 05/26/2024 10:46:49
+ * Project Name: dac-ext-clock.cyfx
+ * Time : 06/16/2024 09:37:17
  * Device Type: FX3
  * Project Type: GPIF2
  *
@@ -79,7 +79,7 @@ static uint8_t CyFxGpifWavedataPosition[]  = {
    GPIF II configuration register values.
  */
 static uint32_t CyFxGpifRegValue[]  = {
-    0x800083B0,  /*  CY_U3P_PIB_GPIF_CONFIG */
+    0x80008380,  /*  CY_U3P_PIB_GPIF_CONFIG */
     0x0000006C,  /*  CY_U3P_PIB_GPIF_BUS_CONFIG */
     0x00000000,  /*  CY_U3P_PIB_GPIF_BUS_CONFIG2 */
     0x00000046,  /*  CY_U3P_PIB_GPIF_AD_CONFIG */

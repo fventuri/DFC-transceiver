@@ -75,7 +75,6 @@
       <DisplayName>PONG_LOOP</DisplayName>
       <RepeatUntillNextTransition>True</RepeatUntillNextTransition>
       <RepeatCount>0</RepeatCount>
-      <Action ElementId="COUNT_DATA0" ActionType="COUNT_DATA" />
       <Action ElementId="DR_DATA0" ActionType="DR_DATA">
         <IsDataCounterConnected>False</IsDataCounterConnected>
         <DataSourceSink>Socket</DataSourceSink>
@@ -84,6 +83,7 @@
         <DriveNewData>DriveNewData</DriveNewData>
         <UpdateSource>True</UpdateSource>
       </Action>
+      <Action ElementId="COUNT_DATA0" ActionType="COUNT_DATA" />
     </State>
     <State ElementId="STATE3" StateType="NormalState">
       <DisplayName>PONG_DMA_BUSY</DisplayName>

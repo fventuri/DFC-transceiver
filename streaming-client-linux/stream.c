@@ -33,6 +33,7 @@ static unsigned long long *histogram_even = NULL;   // histogram for even sample
 static unsigned long long *histogram_odd = NULL;    // histogram for odd samples
 
 static uint8_t *read_buffer = NULL;
+static unsigned long long input_data_size = 0;      // total size of input data
 
 
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer) ;
@@ -230,6 +231,8 @@ void stream_stats(stream_t *this, unsigned int duration)
             }
             fprintf(stderr, "total odd histogram samples: %llu\n", total_histogram_samples);
         }
+    } else if (this->direction == STREAM_TX) {
+        fprintf(stderr, "input data size: %llu B\n", input_data_size);
     }
 
     return;
@@ -333,6 +336,32 @@ static int stream_rx_callback(stream_t *this, uint8_t *buffer, int length)
         }
     }
 
+#ifdef _BUFFER_INDEX_CHECK_
+    /* buffer index check */
+    static int buffer_index = 0;
+    if (buffer_index >= 0) {
+        if (this->buffers[buffer_index] == buffer) {
+            buffer_index = (buffer_index + 1) % this->num_concurrent_transfers;
+        } else {
+            bool found = false;
+            for (int i = 0; i < this->num_concurrent_transfers; i++) {
+                if (this->buffers[i] == buffer) {
+                    fprintf(stderr, "warning - skipped at least %d buffers\n",
+                            (this->num_concurrent_transfers + i - buffer_index) % this->num_concurrent_transfers);
+                    buffer_index = (i + 1) % this->num_concurrent_transfers;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                fprintf(stderr, "error - cannot find buffer index for %p\n", buffer);
+                /* stop checking at this point */
+                buffer_index = -1;
+            }
+        }
+    }
+#endif  /* _BUFFER_INDEX_CHECK_ */
+
     return 0;
 }
 
@@ -361,7 +390,7 @@ static int stream_tx_callback(stream_t *this, uint8_t *buffer, int length)
         }
     }
 
-    /* interleave the 16 bit samples them with 0 samples because we are running at 32 bits */
+    /* interleave the 16 bit samples with all 0 since because we are running 32 bit wide */
     /* shift the values by 2 bits because the DAC is comnnected to bits 2:15 */
     short *insamples = (short *)read_buffer;
     int ninsamples = (length / 2 - remaining) / sizeof(insamples[0]);
@@ -370,7 +399,8 @@ static int stream_tx_callback(stream_t *this, uint8_t *buffer, int length)
         samples[j+1] = insamples[i] << 2;
     }
 
-    transfer_size += ninsamples * sizeof(insamples[0]);
+    transfer_size += length;
+    input_data_size += ninsamples * sizeof(insamples[0]);
 
     return 0;
 }
