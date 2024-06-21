@@ -45,7 +45,7 @@ static bool usb_control_read(CCyUSBDevice *usbDevice, UCHAR request, const char 
 static bool usb_control_write(CCyUSBDevice *usbDevice, UCHAR request, const char *requestName, UCHAR *data, LONG dataSize);
 static int streamRxCallback(UINT8 *buffer, long length);
 static int streamTxCallback(UINT8 *buffer, long length);
-static void streamStats(streamDirection_t streamDirection, unsigned int duration);
+static void streamStats(streamDirection_t streamDirection, double elapsed);
 static VOID CALLBACK doStopTransfers(PVOID lpParam, BOOLEAN TimerOrWaitFired);
 
 // global variables
@@ -339,6 +339,8 @@ int main(int argc, char *argv[])
         }
     }
 
+    std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+
     if (duration > 0) {
         // timer queue
         HANDLE timerQueue = CreateTimerQueue();
@@ -363,7 +365,7 @@ int main(int argc, char *argv[])
 
         /* allocate read buffer if direction is STREAM_TX */
         if (streamDirection == STREAM_TX) {
-            readBuffer = (uint8_t *)malloc(transferSize / 2);
+            readBuffer = (uint8_t *)malloc(transferSize);
         }
 
         typedef struct {
@@ -453,7 +455,10 @@ int main(int argc, char *argv[])
             }
         }
 
-        streamStats(streamDirection, duration);
+        std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
+        double elapsed = std::chrono::duration_cast<std::chrono::microseconds> (end_time - start_time).count() / 1e6;
+
+        streamStats(streamDirection, elapsed);
 
         // clean up transfers
         for (int i = 0; i < queuedepth; i++) {
@@ -583,9 +588,8 @@ static int streamTxCallback(UINT8 *buffer, long length)
     if (!readIstream.is_open()) {
         return -1;
     }
-    /* read nsamples/2 from input because of interleaving them with 0's - see below */
-    //readIstream.read((const UINT8 *)readBuffer, length / 2);
-    readIstream.read((char *) readBuffer, length / 2);
+    //readIstream.read((const UINT8 *)readBuffer, length);
+    readIstream.read((char *) readBuffer, length);
     if (!readIstream) {
         if (readIstream.eof()) {
             /* EOF - send a message and exit */
@@ -599,26 +603,24 @@ static int streamTxCallback(UINT8 *buffer, long length)
         return -1;
     }
 
-    /* interleave the 16 bit samples them with 0 samples because we are running at 32 bits */
     /* shift the values by 2 bits because the DAC is comnnected to bits 2:15 */
-    short *insamples = (short *)readBuffer;
-    int ninsamples = readIstream.gcount() / sizeof(insamples[0]);
-    for (int i = 0, j = 0; i < ninsamples; i++, j += 2) {
-        samples[j] = 0;
-        samples[j+1] = insamples[i] << 2;
+    short *readSamples = (short *)readBuffer;
+    int nReadSamples = readIstream.gcount() / sizeof(readSamples[0]);
+    for (int i = 0; i < nReadSamples; i++) {
+        samples[i] = readSamples[i] << 2;
     }
 
-    totalTransferSize += ninsamples * sizeof(insamples[0]);
+    totalTransferSize += nReadSamples * sizeof(readSamples[0]);
 
     return 0;
 }
 
-static void streamStats(streamDirection_t streamDirection, unsigned int duration)
+static void streamStats(streamDirection_t streamDirection, double elapsed)
 {
     fprintf(stderr, "success count: %u\n", successCount);
     fprintf(stderr, "failure count: %u\n", failureCount);
     fprintf(stderr, "transfer size: %llu B\n", totalTransferSize);
-    fprintf(stderr, "transfer rate: %.0lf kB/s\n", (double) totalTransferSize / duration / 1024.0);
+    fprintf(stderr, "transfer rate: %.0lf kB/s\n", (double) totalTransferSize / elapsed / 1024.0);
     if (streamDirection == STREAM_RX) {
         fprintf(stderr, "even samples range: [%hd,%hd]\n", sampleEvenMin, sampleEvenMax);
         fprintf(stderr, "odd samples range: [%hd,%hd]\n", sampleOddMin, sampleOddMax);

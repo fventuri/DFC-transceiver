@@ -33,7 +33,6 @@ static unsigned long long *histogram_even = NULL;   // histogram for even sample
 static unsigned long long *histogram_odd = NULL;    // histogram for odd samples
 
 static uint8_t *read_buffer = NULL;
-static unsigned long long input_data_size = 0;      // total size of input data
 
 
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer) ;
@@ -63,7 +62,7 @@ int stream_init(stream_t *this, stream_direction_t direction, int read_write_fil
 
     /* allocate read buffer if direction is STREAM_TX */
     if (direction == STREAM_TX) {
-        read_buffer = (uint8_t *)malloc(this->transfer_size / 2);
+        read_buffer = (uint8_t *)malloc(this->transfer_size);
     }
 
     /* populate the required libusb_transfer fields */
@@ -174,12 +173,12 @@ int stream_stop(stream_t *this)
     return ok ? 0 : - 1;
 }
 
-void stream_stats(stream_t *this, unsigned int duration)
+void stream_stats(stream_t *this, double elapsed)
 {
     fprintf(stderr, "success count: %u\n", success_count);
     fprintf(stderr, "failure count: %u\n", failure_count);
     fprintf(stderr, "transfer size: %llu B\n", transfer_size);
-    fprintf(stderr, "transfer rate: %.0lf kB/s\n", (double) transfer_size / duration / 1024.0);
+    fprintf(stderr, "transfer rate: %.0lf kB/s\n", (double) transfer_size / elapsed / 1024.0);
     if (this->direction == STREAM_RX) {
         fprintf(stderr, "even samples range: [%hd,%hd]\n", sample_even_min, sample_even_max);
         fprintf(stderr, "odd samples range: [%hd,%hd]\n", sample_odd_min, sample_odd_max);
@@ -231,8 +230,6 @@ void stream_stats(stream_t *this, unsigned int duration)
             }
             fprintf(stderr, "total odd histogram samples: %llu\n", total_histogram_samples);
         }
-    } else if (this->direction == STREAM_TX) {
-        fprintf(stderr, "input data size: %llu B\n", input_data_size);
     }
 
     return;
@@ -368,12 +365,11 @@ static int stream_rx_callback(stream_t *this, uint8_t *buffer, int length)
 static int stream_tx_callback(stream_t *this, uint8_t *buffer, int length)
 {
     short *samples = (short *)buffer;
-    int nsamples __attribute__((unused)) = length / sizeof(samples[0]);
+    int nsamples = length / sizeof(samples[0]);
 
-    /* read nsamples/2 from input because of interleaving them with 0's - see below */
-    size_t remaining = length / 2;
+    size_t remaining = length;
     while (remaining > 0) {
-        ssize_t nread = read(this->read_write_fileno, read_buffer + (length / 2 - remaining), remaining);
+        ssize_t nread = read(this->read_write_fileno, read_buffer + (length - remaining), remaining);
         if (nread == -1) {
             fprintf(stderr, "read from input file/stdin failed - error: %s\n", strerror(errno));
             /* if there's any error stop reading from input file */
@@ -390,17 +386,14 @@ static int stream_tx_callback(stream_t *this, uint8_t *buffer, int length)
         }
     }
 
-    /* interleave the 16 bit samples with all 0 since because we are running 32 bit wide */
     /* shift the values by 2 bits because the DAC is comnnected to bits 2:15 */
-    short *insamples = (short *)read_buffer;
-    int ninsamples = (length / 2 - remaining) / sizeof(insamples[0]);
-    for (int i = 0, j = 0; i < ninsamples; i++, j += 2) {
-        samples[j] = 0;
-        samples[j+1] = insamples[i] << 2;
+    short *read_samples = (short *)read_buffer;
+    int nread_samples = (length - remaining) / sizeof(read_samples[0]);
+    for (int i = 0; i < nread_samples; i++) {
+        samples[i] = read_samples[i] << 2;
     }
 
-    transfer_size += length;
-    input_data_size += ninsamples * sizeof(insamples[0]);
+    transfer_size += nread_samples * sizeof(read_samples[0]);
 
     return 0;
 }

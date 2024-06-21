@@ -11,7 +11,7 @@
 #include "cyfxgpif2config-dac.h"
 
 static void Init() {
-    DacModesInit(CyTrue);
+    DacModesInit(CyFalse);
 }
 
 static void DeInit()
@@ -21,7 +21,7 @@ static void DeInit()
 
 static void Start(CyU3PUSBSpeed_t usbSpeed, uint16_t size)
 {
-    DacModesStart(usbSpeed, size, CyTrue, &CyFxGpifConfig, START, ALPHA_START);
+    DacModesStart(usbSpeed, size, CyFalse, &CyFxGpifConfig, START, ALPHA_START);
 }
 
 static void Stop()

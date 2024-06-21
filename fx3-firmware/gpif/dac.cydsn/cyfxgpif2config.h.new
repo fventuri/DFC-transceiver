@@ -49,7 +49,7 @@
 /* Summary
    Transition function values used in the state machine.
  */
-static uint16_t CyFxGpifTransition[]  = {
+uint16_t CyFxGpifTransition[]  = {
     0x0000, 0xAAAA, 0x5555, 0xFFFF, 0x3333
 };
 
@@ -59,7 +59,7 @@ static uint16_t CyFxGpifTransition[]  = {
    This array consists of non-replicated waveform descriptors and acts as a 
    waveform table. 
  */
-static CyU3PGpifWaveData CyFxGpifWavedata[]  = {
+CyU3PGpifWaveData CyFxGpifWavedata[]  = {
     {{0x1E739E01,0x000000C0,0x80000000},{0x00000000,0x00000000,0x00000000}},
     {{0x2E739A04,0x0000C002,0x80000080},{0x00000000,0x00000000,0x00000000}},
     {{0x1E739A03,0x040000C4,0x80000080},{0x00000000,0x00000000,0x00000000}},
@@ -73,14 +73,14 @@ static CyU3PGpifWaveData CyFxGpifWavedata[]  = {
 /* Summary
    Table that maps state indices to the descriptor table indices.
  */
-static uint8_t CyFxGpifWavedataPosition[]  = {
+uint8_t CyFxGpifWavedataPosition[]  = {
     0,1,2,3,4,5,6,7,2,1
 };
 
 /* Summary
    GPIF II configuration register values.
  */
-static uint32_t CyFxGpifRegValue[]  = {
+uint32_t CyFxGpifRegValue[]  = {
     0x80008380,  /*  CY_U3P_PIB_GPIF_CONFIG */
     0x00000067,  /*  CY_U3P_PIB_GPIF_BUS_CONFIG */
     0x00000000,  /*  CY_U3P_PIB_GPIF_BUS_CONFIG2 */
@@ -162,7 +162,7 @@ static uint32_t CyFxGpifRegValue[]  = {
 /* Summary
    This structure holds all the configuration inputs for the GPIF II. 
  */
-static const CyU3PGpifConfig_t CyFxGpifConfig  = {
+const CyU3PGpifConfig_t CyFxGpifConfig  = {
     (uint16_t)(sizeof(CyFxGpifWavedataPosition)/sizeof(uint8_t)),
     CyFxGpifWavedata,
     CyFxGpifWavedataPosition,

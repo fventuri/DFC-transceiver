@@ -313,13 +313,16 @@ int main(int argc, char *argv[])
         sigact.sa_flags = 0;
         (void)sigaction(SIGINT, &sigact, NULL);
         (void)sigaction(SIGTERM, &sigact, NULL);
-        ( void)sigaction(SIGALRM, &sigact, NULL);
+        (void)sigaction(SIGALRM, &sigact, NULL);
 
         status = stream_start(&stream);
         if (status == -1) {
             usb_close(&dfc.usb_device);
             return EXIT_FAILURE;
         }
+
+        struct timespec start_time;
+        clock_gettime(CLOCK_REALTIME, &start_time);
 
         alarm(duration);
 
@@ -333,7 +336,10 @@ int main(int argc, char *argv[])
             return EXIT_FAILURE;
         }
 
-        stream_stats(&stream, duration);
+        struct timespec end_time;
+        clock_gettime(CLOCK_REALTIME, &end_time);
+        double elapsed = (end_time.tv_sec - start_time.tv_sec) + 1e-9 * (end_time.tv_nsec - start_time.tv_nsec);
+        stream_stats(&stream, elapsed);
 
         status = stream_fini(&stream);
         if (status == -1) {
@@ -353,7 +359,7 @@ int main(int argc, char *argv[])
     if (!(write_fileno == -1 || write_fileno == STDOUT_FILENO)) {
         close(write_fileno);
     }
-    if (!(read_fileno == -1 || write_fileno == STDIN_FILENO)) {
+    if (!(read_fileno == -1 || read_fileno == STDIN_FILENO)) {
         close(read_fileno);
     }
 

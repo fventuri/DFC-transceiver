@@ -26,6 +26,6 @@ int stream_init(stream_t *this, stream_direction_t direction, int read_write_fil
 int stream_fini(stream_t *this);
 int stream_start(stream_t *this);
 int stream_stop(stream_t *this);
-void stream_stats(stream_t *this, unsigned int duration);
+void stream_stats(stream_t *this, double elapsed);
 
 #endif /* _STREAMING_CLIENT_STREAM_H_ */
