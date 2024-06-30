@@ -365,7 +365,7 @@ static int stream_rx_callback(stream_t *this, uint8_t *buffer, int length)
 static int stream_tx_callback(stream_t *this, uint8_t *buffer, int length)
 {
     short *samples = (short *)buffer;
-    int nsamples = length / sizeof(samples[0]);
+    int nsamples __attribute__ ((unused)) = length / sizeof(samples[0]);
 
     size_t remaining = length;
     while (remaining > 0) {

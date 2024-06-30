@@ -11,3 +11,5 @@ set(SOURCE_FILES
 )
 
 add_executable(signal-generator ${SOURCE_FILES})
+
+install(TARGETS signal-generator)

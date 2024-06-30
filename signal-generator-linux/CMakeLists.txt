@@ -13,3 +13,4 @@ set(SOURCE_FILES
 add_executable(signal-generator ${SOURCE_FILES})
 target_link_libraries(signal-generator m)
 
+install(TARGETS signal-generator)

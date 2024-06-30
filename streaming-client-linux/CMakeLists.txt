@@ -17,3 +17,4 @@ set(SOURCE_FILES
 add_executable(streaming-client ${SOURCE_FILES})
 target_link_libraries(streaming-client usb-1.0 m)
 
+install(TARGETS streaming-client)

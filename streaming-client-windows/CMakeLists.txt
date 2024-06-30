@@ -16,3 +16,5 @@ if(MSVC)
   target_link_libraries(streaming-client "$ENV{FX3_INSTALL_PATH}/library/cpp/lib/x64/CyAPI.lib" setupapi.lib legacy_stdio_definitions.lib)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB:libcmt.lib")
 endif()
+
+install(TARGETS streaming-client)
